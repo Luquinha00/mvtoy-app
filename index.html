@@ -91,23 +91,25 @@ function draw(meses){const d=D;
   const totAnt=linhas.reduce((s,x)=>s+(x.ant?+x.ant.faturamento:0),0);
   const com=linhas.filter(x=>x.l).length;
   const mx=Math.max(1,...linhas.map(x=>x.l?+x.l.faturamento:0));
-  const var_=totAnt>0?((tot/totAnt-1)*100):null;
+  const hoje=new Date();const atual=MES.slice(0,7)===hoje.toISOString().slice(0,7);
+  const var_=(!atual&&totAnt>0)?((tot/totAnt-1)*100):null;
   const res=(d.resultados||[]).filter(r=>r.mes===MES);
   let h=`<div class="sel">${sel}</div><div class="kpis">
-   <div class="kpi"><div class="l">Faturamento ${nomeMes(MES)}</div><div class="v">${brl(tot)}</div><div class="s">${var_===null?'—':(var_>=0?'▲ ':'▼ ')+Math.abs(var_).toFixed(0)+'% vs mês anterior'}</div></div>
+   <div class="kpi"><div class="l">Faturamento ${nomeMes(MES)}</div><div class="v">${brl(tot)}</div><div class="s">${atual?'mês em andamento (parcial)':var_===null?'—':(var_>=0?'▲ ':'▼ ')+Math.abs(var_).toFixed(0)+'% vs mês anterior'}</div></div>
    <div class="kpi"><div class="l">Máquinas</div><div class="v">${d.maquinas.length}</div><div class="s">${com} com dado no mês</div></div>`;
   res.forEach(r=>{h+=`<div class="kpi g"><div class="l">Sua parte · ${nomeMes(MES)}</div><div class="v">${brl(r.parte_investidor)}</div><div class="s">rendimento ${String(r.rendimento_pct).replace('.',',')}% no mês</div></div>`});
   h+=`</div>`;
   if(res.length){h+=`<div class="card"><h2>Resultado da sociedade · ${nomeMes(MES)}</h2><div class="res">`+res.map(r=>`<div>Faturamento<b style="color:var(--roxo)">${brl(r.faturamento)}</b></div><div>Resultado após custos<b>${brl(r.resultado)}</b></div><div>Sua parte (50%)<b>${brl(r.parte_investidor)}</b></div>`).join('')+`</div><p class="nota" style="margin-top:12px">O fechamento completo do mês, com os comprovantes do PagPlush, é enviado pela MV Toy todo dia 10.</p></div>`}
   h+=`<div class="card"><h2>Máquinas · ${nomeMes(MES)}</h2><div class="wrap"><table><tr><th>Máquina</th><th>Ponto</th><th class="r cj">Jogada</th><th class="r">Faturamento</th></tr>`;
   linhas.sort((a,b)=>(b.l?+b.l.faturamento:-1)-(a.l?+a.l.faturamento:-1)).forEach(({m,l,ant})=>{
-    const f=l?+l.faturamento:null;const dv=(l&&ant&&+ant.faturamento>0)?((f/ant.faturamento-1)*100):null;
+    const f=l?+l.faturamento:null;const dv=(!atual&&l&&ant&&+ant.faturamento>0)?((f/ant.faturamento-1)*100):null;
     h+=`<tr><td><span class="mvt">${esc(m.codigo)}</span><small>${esc(m.tipo)}${m.premio&&m.premio!=='sem prêmio'?' · '+esc(m.premio):''} · ${esc(m.jogada)}</small>${m.status&&m.status!=='Ativa'?`<span class="st off">${esc(m.status)}</span>`:''}</td>
     <td>${esc(m.ponto)}<small>${esc(m.cidade)}</small></td><td class="r cj">${esc(m.jogada)}</td>
     <td class="r">${f===null?'<small>sem dado</small>':brl(f)+(dv===null?'':`<small style="color:${dv>=0?'#14653A':'#9B241B'}">${dv>=0?'▲':'▼'} ${Math.abs(dv).toFixed(0)}%</small>`)}<div class="bar"><i style="width:${f?Math.round(f/mx*100):0}%"></i></div></td></tr>`});
   h+=`</table></div></div><div class="nota y"><b>Sobre os dados:</b> faturamento bruto da telemetria PagPlush (dinheiro + Pix + débito + crédito) do 1º ao último dia do mês. Em breve o painel passa a atualizar em tempo real.</div>`;
   document.getElementById('app').innerHTML=h}
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(b){MES=b.dataset.m;draw(window.MESES_LIST)}});
+window.addEventListener('hashchange',()=>location.reload());
 init();
 </script>
 </body>
