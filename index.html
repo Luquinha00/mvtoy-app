@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>MV Toy · Minhas Máquinas</title>
+<link rel="icon" href="mascote.png">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--roxo:#4A37B5;--rxe:#372792;--mar:#211C5E;--am:#FFC61C;--verm:#E23A2D;--vd:#1E9E63;--lav:#EEEBFB;--ln:#E4E0F5;--cz:#6B6596;--bg:#F6F5FC}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Poppins,system-ui,sans-serif;background:var(--bg);color:var(--mar);min-height:100vh}
+.top{background:radial-gradient(120% 120% at 80% 0%,#5B47D0 0%,var(--roxo) 45%,var(--rxe) 85%);color:#fff;padding:18px 16px 70px;position:relative}
+.top .in{max-width:980px;margin:0 auto;display:flex;align-items:center;gap:14px}
+.top img.logo{height:46px}
+.top .who{margin-left:auto;text-align:right;font-size:13px;opacity:.95}
+.top .who b{display:block;font-size:16px}
+.badge{display:inline-block;background:var(--am);color:var(--mar);font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;margin-top:4px;text-transform:uppercase;letter-spacing:.05em}
+main{max-width:980px;margin:-50px auto 40px;padding:0 16px;position:relative}
+.card{background:#fff;border:1px solid var(--ln);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 4px 18px rgba(33,28,94,.06)}
+h2{font-size:17px;margin-bottom:10px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid var(--ln);border-radius:16px;padding:14px 16px;box-shadow:0 4px 18px rgba(33,28,94,.06)}
+.kpi .l{font-size:11px;font-weight:600;color:var(--cz);text-transform:uppercase;letter-spacing:.06em}
+.kpi .v{font-size:24px;font-weight:700;color:var(--roxo);margin-top:4px}
+.kpi .s{font-size:12px;color:var(--cz)}
+.kpi.g .v{color:var(--vd)}
+.sel{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.sel button{font:inherit;font-size:13px;border:1px solid var(--ln);background:#fff;color:var(--mar);padding:6px 14px;border-radius:20px;cursor:pointer}
+.sel button{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.35)}
+.sel button.on{background:var(--am);color:var(--mar);border-color:var(--am);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;color:var(--cz);text-transform:uppercase;letter-spacing:.05em;padding:8px 6px;border-bottom:2px solid var(--ln)}
+td{padding:10px 6px;border-bottom:1px solid #F0EEF9;vertical-align:top}
+td.r,th.r{text-align:right;white-space:nowrap}
+td small{display:block;color:var(--cz);font-size:11px}
+.mvt{font-weight:700;color:var(--roxo)}
+.st{font-size:11px;font-weight:600;padding:1px 8px;border-radius:10px;background:#E8F5ED;color:#14653A}
+.st.off{background:#FDECEA;color:#9B241B}
+.bar{height:6px;background:var(--lav);border-radius:4px;margin-top:5px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--roxo);border-radius:4px}
+.nota{font-size:12.5px;line-height:1.55;background:var(--lav);border-left:4px solid var(--roxo);padding:10px 12px;border-radius:10px;color:var(--mar)}
+.nota.y{background:#FFF6DB;border-color:var(--am)}
+.res{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.res div{background:var(--bg);border-radius:12px;padding:12px}
+.res b{font-size:20px;color:var(--vd);display:block}
+.empty{text-align:center;padding:50px 16px;color:var(--cz)}
+.empty img{width:120px;margin-bottom:10px}
+footer{text-align:center;font-size:11px;color:var(--cz);padding:10px 16px 30px;letter-spacing:.05em}
+.wrap{overflow-x:auto}
+@media(max-width:560px){.top .who{font-size:12px}.kpi .v{font-size:20px}td,th{padding:8px 4px}.cj{display:none}.kpis{grid-template-columns:1fr 1fr}.kpi.g{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<div class="top"><div class="in"><img class="logo" src="logo.png" alt="MV Toy"><div class="who" id="who"></div></div></div>
+<main id="app"><div class="card empty"><img src="mascote.png" alt=""><p>Carregando suas máquinas…</p></div></main>
+<footer>MV TOY · TECNOLOGIA E ENTRETENIMENTO · GRUPO MUNDO VIRTUAL<br>Dados da telemetria PagPlush · uso restrito do titular deste link</footer>
+<script>
+const URL_SB='https://koxormltidkmdwxgqbsm.supabase.co', KEY='sb_publishable_J7Ps1yZ4BPvFMof7coAAuQ_xO4I5QIe';
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const brl=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const nomeMes=m=>{const d=new Date(m+'T12:00:00');return MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2)};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function token(){const h=new URLSearchParams(location.hash.slice(1));let k=h.get('k');
+  if(!k){const q=new URLSearchParams(location.search);k=q.get('k');}
+  try{if(k)localStorage.setItem('mvt_k',k);else k=localStorage.getItem('mvt_k')}catch(e){}
+  return k}
+function vazio(msg){document.getElementById('app').innerHTML=`<div class="card empty"><img src="mascote.png" alt=""><p>${msg}</p></div>`}
+async function init(){
+  const k=token();
+  if(!k||!/^[0-9a-f-]{36}$/i.test(k)){vazio('Este é o painel de máquinas da MV Toy.<br>Acesse pelo link pessoal que você recebeu da MV Toy.');return}
+  let d;
+  try{const r=await fetch(URL_SB+'/rest/v1/rpc/mvt_portal',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({p_token:k})});d=await r.json()}
+  catch(e){vazio('Não foi possível carregar agora. Tente de novo em instantes.');return}
+  if(!d||d.erro){try{localStorage.removeItem('mvt_k')}catch(e){};vazio(esc(d&&d.erro||'Link inválido.'));return}
+  render(d)}
+let D,MES;
+function render(d){D=d;
+  const papel={socio:'Sócio',investidor:'Investidor',admin:'Administrador'}[d.papel]||d.papel;
+  document.getElementById('who').innerHTML=`Olá,<b>${esc(d.nome)}</b><span class="badge">${papel}</span>`;
+  const meses=[...new Set(d.maquinas.flatMap(m=>m.leituras.map(l=>l.mes)))].sort();
+  if(!d.maquinas.length){vazio('Olá, '+esc(d.nome)+'! Suas máquinas ainda estão sendo vinculadas ao painel.<br>Assim que estiverem cadastradas, elas aparecem aqui.');return}
+  MES=MES||meses[meses.length-1];
+  draw(meses)}
+function draw(meses){const d=D;
+  window.MESES_LIST=meses;
+  const sel=meses.map(m=>`<button class="${m===MES?'on':''}" data-m="${m}">${nomeMes(m)}</button>`).join('');
+  const linhas=d.maquinas.map(m=>{const l=m.leituras.find(x=>x.mes===MES);const ant=m.leituras.filter(x=>x.mes<MES).slice(-1)[0];return {m,l,ant}});
+  const tot=linhas.reduce((s,x)=>s+(x.l?+x.l.faturamento:0),0);
+  const totAnt=linhas.reduce((s,x)=>s+(x.ant?+x.ant.faturamento:0),0);
+  const com=linhas.filter(x=>x.l).length;
+  const mx=Math.max(1,...linhas.map(x=>x.l?+x.l.faturamento:0));
+  const var_=totAnt>0?((tot/totAnt-1)*100):null;
+  const res=(d.resultados||[]).filter(r=>r.mes===MES);
+  let h=`<div class="sel">${sel}</div><div class="kpis">
+   <div class="kpi"><div class="l">Faturamento ${nomeMes(MES)}</div><div class="v">${brl(tot)}</div><div class="s">${var_===null?'—':(var_>=0?'▲ ':'▼ ')+Math.abs(var_).toFixed(0)+'% vs mês anterior'}</div></div>
+   <div class="kpi"><div class="l">Máquinas</div><div class="v">${d.maquinas.length}</div><div class="s">${com} com dado no mês</div></div>`;
+  res.forEach(r=>{h+=`<div class="kpi g"><div class="l">Sua parte · ${nomeMes(MES)}</div><div class="v">${brl(r.parte_investidor)}</div><div class="s">rendimento ${String(r.rendimento_pct).replace('.',',')}% no mês</div></div>`});
+  h+=`</div>`;
+  if(res.length){h+=`<div class="card"><h2>Resultado da sociedade · ${nomeMes(MES)}</h2><div class="res">`+res.map(r=>`<div>Faturamento<b style="color:var(--roxo)">${brl(r.faturamento)}</b></div><div>Resultado após custos<b>${brl(r.resultado)}</b></div><div>Sua parte (50%)<b>${brl(r.parte_investidor)}</b></div>`).join('')+`</div><p class="nota" style="margin-top:12px">O fechamento completo do mês, com os comprovantes do PagPlush, é enviado pela MV Toy todo dia 10.</p></div>`}
+  h+=`<div class="card"><h2>Máquinas · ${nomeMes(MES)}</h2><div class="wrap"><table><tr><th>Máquina</th><th>Ponto</th><th class="r cj">Jogada</th><th class="r">Faturamento</th></tr>`;
+  linhas.sort((a,b)=>(b.l?+b.l.faturamento:-1)-(a.l?+a.l.faturamento:-1)).forEach(({m,l,ant})=>{
+    const f=l?+l.faturamento:null;const dv=(l&&ant&&+ant.faturamento>0)?((f/ant.faturamento-1)*100):null;
+    h+=`<tr><td><span class="mvt">${esc(m.codigo)}</span><small>${esc(m.tipo)}${m.premio&&m.premio!=='sem prêmio'?' · '+esc(m.premio):''} · ${esc(m.jogada)}</small>${m.status&&m.status!=='Ativa'?`<span class="st off">${esc(m.status)}</span>`:''}</td>
+    <td>${esc(m.ponto)}<small>${esc(m.cidade)}</small></td><td class="r cj">${esc(m.jogada)}</td>
+    <td class="r">${f===null?'<small>sem dado</small>':brl(f)+(dv===null?'':`<small style="color:${dv>=0?'#14653A':'#9B241B'}">${dv>=0?'▲':'▼'} ${Math.abs(dv).toFixed(0)}%</small>`)}<div class="bar"><i style="width:${f?Math.round(f/mx*100):0}%"></i></div></td></tr>`});
+  h+=`</table></div></div><div class="nota y"><b>Sobre os dados:</b> faturamento bruto da telemetria PagPlush (dinheiro + Pix + débito + crédito) do 1º ao último dia do mês. Em breve o painel passa a atualizar em tempo real.</div>`;
+  document.getElementById('app').innerHTML=h}
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(b){MES=b.dataset.m;draw(window.MESES_LIST)}});
+init();
+</script>
+</body>
+</html>
