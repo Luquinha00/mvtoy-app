@@ -5,7 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>MV Toy · Minhas Máquinas</title>
-<link rel="icon" href="mascote.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#4A37B5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MV Toy">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--roxo:#4A37B5;--rxe:#372792;--mar:#211C5E;--am:#FFC61C;--verm:#E23A2D;--vd:#1E9E63;--lav:#EEEBFB;--ln:#E4E0F5;--cz:#6B6596;--bg:#F6F5FC}
@@ -49,12 +56,18 @@ td small{display:block;color:var(--cz);font-size:11px}
 .empty img{width:120px;margin-bottom:10px}
 footer{text-align:center;font-size:11px;color:var(--cz);padding:10px 16px 30px;letter-spacing:.05em}
 .wrap{overflow-x:auto}
+.inst{display:none;align-items:center;gap:12px;background:#fff;border:1px solid var(--ln);border-radius:16px;padding:12px 14px;margin-bottom:14px;box-shadow:0 4px 18px rgba(33,28,94,.06)}
+.inst.on{display:flex}.inst img{width:44px;height:44px;border-radius:10px}.inst p{font-size:13px;line-height:1.4;flex:1}
+.inst button,.cola button{font:inherit;font-weight:700;font-size:13px;background:var(--am);color:var(--mar);border:0;border-radius:12px;padding:9px 14px;cursor:pointer}
+.inst .x{background:none;font-size:18px;padding:4px 8px;color:var(--cz)}
+.cola{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.cola input{font:inherit;font-size:13px;flex:1;min-width:220px;max-width:420px;border:1px solid var(--ln);border-radius:12px;padding:9px 12px}
 @media(max-width:560px){.top .who{font-size:12px}.kpi .v{font-size:20px}td,th{padding:8px 4px}.cj{display:none}.kpis{grid-template-columns:1fr 1fr}.kpi.g{grid-column:1/-1}}
 </style>
 </head>
 <body>
 <div class="top"><div class="in"><img class="logo" src="logo.png" alt="MV Toy"><div class="who" id="who"></div></div></div>
-<main id="app"><div class="card empty"><img src="mascote.png" alt=""><p>Carregando suas máquinas…</p></div></main>
+<main><div class="inst" id="inst"><img src="icon-192.png" alt=""><p id="instTxt"><b>Instale o app MV Toy</b><br>Acompanhe suas máquinas direto da tela inicial do celular.</p><button id="instBtn">Instalar</button><button class="x" id="instX" aria-label="Fechar">×</button></div><div id="app"><div class="card empty"><img src="mascote.png" alt=""><p>Carregando suas máquinas…</p></div></div></main>
 <footer>MV TOY · TECNOLOGIA E ENTRETENIMENTO · GRUPO MUNDO VIRTUAL<br>Dados da telemetria PagPlush · uso restrito do titular deste link</footer>
 <script>
 const URL_SB='https://koxormltidkmdwxgqbsm.supabase.co', KEY='sb_publishable_J7Ps1yZ4BPvFMof7coAAuQ_xO4I5QIe';
@@ -66,10 +79,11 @@ function token(){const h=new URLSearchParams(location.hash.slice(1));let k=h.get
   if(!k){const q=new URLSearchParams(location.search);k=q.get('k');}
   try{if(k)localStorage.setItem('mvt_k',k);else k=localStorage.getItem('mvt_k')}catch(e){}
   return k}
-function vazio(msg){document.getElementById('app').innerHTML=`<div class="card empty"><img src="mascote.png" alt=""><p>${msg}</p></div>`}
+function vazio(msg,cola){document.getElementById('app').innerHTML=`<div class="card empty"><img src="mascote.png" alt=""><p>${msg}</p>${cola?`<div class="cola"><input id="link" placeholder="Cole aqui o seu link de acesso" autocomplete="off"><button id="entrar">Entrar</button></div>`:''}</div>`}
+document.addEventListener('click',e=>{if(e.target.id==='entrar'){const v=(document.getElementById('link').value||'').trim();const m=v.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);if(!m){alert('Link não reconhecido. Copie o link completo que a MV Toy enviou.');return}try{localStorage.setItem('mvt_k',m[0])}catch(_){};location.hash='k='+m[0]}});
 async function init(){
   const k=token();
-  if(!k||!/^[0-9a-f-]{36}$/i.test(k)){vazio('Este é o painel de máquinas da MV Toy.<br>Acesse pelo link pessoal que você recebeu da MV Toy.');return}
+  if(!k||!/^[0-9a-f-]{36}$/i.test(k)){vazio('Este é o painel de máquinas da MV Toy.<br>Abra pelo link pessoal que você recebeu da MV Toy ou cole o link abaixo.',true);return}
   let d;
   try{const r=await fetch(URL_SB+'/rest/v1/rpc/mvt_portal',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({p_token:k})});d=await r.json()}
   catch(e){vazio('Não foi possível carregar agora. Tente de novo em instantes.');return}
@@ -111,6 +125,20 @@ function draw(meses){const d=D;
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(b){MES=b.dataset.m;draw(window.MESES_LIST)}});
 window.addEventListener('hashchange',()=>location.reload());
 init();
+// ---- app instalável (PWA) ----
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+(function(){const box=document.getElementById('inst'),btn=document.getElementById('instBtn'),txt=document.getElementById('instTxt');
+  const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  let fechado=false;try{fechado=localStorage.getItem('mvt_inst_x')==='1'}catch(_){}
+  if(standalone||fechado)return;
+  let ev=null;
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();ev=e;box.classList.add('on')});
+  btn.onclick=async()=>{if(ev){ev.prompt();await ev.userChoice;ev=null;box.classList.remove('on')}};
+  document.getElementById('instX').onclick=()=>{box.classList.remove('on');try{localStorage.setItem('mvt_inst_x','1')}catch(_){}};
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  if(ios){txt.innerHTML='<b>Instale o app MV Toy</b><br>No Safari, toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>.';btn.style.display='none';box.classList.add('on')}
+  window.addEventListener('appinstalled',()=>box.classList.remove('on'));
+})();
 </script>
 </body>
 </html>
