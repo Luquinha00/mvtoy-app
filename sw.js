@@ -1,6 +1,6 @@
 // MV Toy · service worker: guarda a "casca" do app para abrir rápido e instalar no celular.
 // Os dados das máquinas (Supabase) NUNCA ficam em cache: sempre vêm atualizados da internet.
-const CACHE = 'mvtoy-app-v1';
+const CACHE = 'mvtoy-app-v2';
 const SHELL = ['./', './index.html', './logo.png', './mascote.png', './icon-192.png', './icon-512.png', './manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
