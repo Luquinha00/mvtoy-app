@@ -39,8 +39,10 @@ function premiosSaidos(m,mes){const l=leit(m,mes);if(l&&num(l.premios)>0)return 
     q+=Math.max(0,num(p.visor)+num(p.repostos)-num(v.visor));ok=true}
   return ok?{qtd:q,fonte:'contagem nas visitas'}:null}
 function estoqueMaq(m){const vs=visitasMaq(m.codigo);const u=vs[vs.length-1];if(!u||(u.visor==null&&u.repostos==null))return null;return {qtd:num(u.visor)+num(u.repostos),data:u.data}}
-function custoPremio(m){if(m.custo_premio!=null)return num(m.custo_premio);const c=D.estoque&&D.estoque.custos;return c&&m.premio&&c[m.premio]!=null?num(c[m.premio]):null}
-const semPremio=m=>!m.premio||/sem pr/i.test(m.premio);
+function custoPremio(m){if(m.itens&&m.itens.length){if(m.itens.some(i=>i.custo==null))return null;return m.itens.reduce((s,i)=>s+num(i.custo)*num(i.qtd),0)}
+  if(m.custo_premio!=null)return num(m.custo_premio);const c=D.estoque&&D.estoque.custos;return c&&m.premio&&c[m.premio]!=null?num(c[m.premio]):null}
+const semPremio=m=>!(m.itens&&m.itens.length)&&(!m.premio||/sem pr/i.test(m.premio));
+const descItens=m=>(m.itens||[]).map(i=>`${String(num(i.qtd)).replace('.',',')}× ${esc(i.nome)}${i.custo!=null&&D.pode.dinheiro?' ('+brl(i.custo)+')':''}`).join(' + ');
 function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l=leit(m,mes),cont=dinheiroContado(m,mes);
   const ps=premiosSaidos(m,mes),cp=custoPremio(m),lm=lancMes(mes,m.codigo);
   const lancPremio=lm.filter(x=>x.tipo==='saida'&&x.categoria===CAT_PREMIO).reduce((s,x)=>s+num(x.valor),0);
@@ -228,7 +230,7 @@ function linhasLucro(x){const L=(t,v,cl,sub)=>`<tr><td>${t}${sub?`<small>${sub}<
   return `<table>${L('Cartão, Pix e remoto',brl(x.eletr))}
   ${L('Dinheiro',x.dinCont!==null?brl(x.dinCont):x.dinTel!==null?brl(x.dinTel):'—','',x.dinCont!==null?`contado no cofre · telemetria ${brl(x.dinTel||0)} · diferença ${(x.dinCont-num(x.dinTel))>=0?'+':''}${brl(x.dinCont-num(x.dinTel))}`:'telemetria (ainda sem contagem no mês)')}
   ${L('<b>Receita</b>','<b>'+brl(x.rec)+'</b>')}
-  ${L('− Pelúcias que saíram',x.custoP===null?'<span class="st y">falta custo</span>':brl(x.custoP),'color:var(--rt)',x.ps?`${x.ps.qtd} un. (${x.ps.fonte})${x.cp!==null?' × '+brl(x.cp):''}`:'sem contagem de prêmios')}
+  ${L('− Prêmios que saíram (produtos)',x.custoP===null?'<span class="st y">falta custo</span>':brl(x.custoP),'color:var(--rt)',x.ps?`${x.ps.qtd} un. (${x.ps.fonte})${x.cp!==null?' × '+brl(x.cp):''}`:'sem contagem de prêmios')}
   ${L('− Comissão / aluguel do ponto',brl(x.com),'color:var(--rt)',x.pagaCom?`paga (devida pelo combinado: ${brl(x.devida)})`:x.devida?'devida pelo combinado (ainda não lançada como paga)':'comissão não cadastrada')}
   ${x.outras?L('− Outras despesas da máquina',brl(x.outras),'color:var(--rt)'):''}${x.ent?L('+ Outras entradas',brl(x.ent),'color:var(--vd)'):''}
   ${L('<b>Lucro da máquina</b>','<b>'+brl(x.lucro)+'</b>',x.lucro>=0?'color:var(--vd)':'color:var(--rt)')}</table>`}
@@ -239,12 +241,13 @@ function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrad
    <div class="tags">${stTag(m)}<span>Jogada ${esc(m.jogada||'—')}</span><span>Prêmio: ${esc(m.premio||'—')}</span>${din&&m.dono?`<span>${esc(m.dono)}</span>`:''}
    ${din&&(num(m.comissao_pct)||num(m.comissao_fixa))?`<span>Comissão ${num(m.comissao_pct)?String(num(m.comissao_pct)).replace('.',',')+'%':''}${num(m.comissao_pct)&&num(m.comissao_fixa)?' + ':''}${num(m.comissao_fixa)?brl(m.comissao_fixa):''}</span>`:''}
    <span>Última visita: ${m.ultima_visita?dataBR(m.ultima_visita):'nenhuma'}</span>
+   ${m.itens&&m.itens.length?`<span>Cada prêmio: ${descItens(m)}</span>`:''}
    ${!semPremio(m)?`<span>Na máquina: ${est?est.qtd+' pelúcias'+(m.capacidade?' de '+m.capacidade:'')+' (contagem '+dataBR(est.data)+')':'sem contagem'}</span>`:''}</div></div>
    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${D.pode.visitar?`<button class="btn" data-visita="${m.codigo}">Registrar visita</button>`:''}
    ${D.pode.lancar?`<button class="btn s" id="lancM">Lançar valor</button>`:''}${D.pode.editar?`<button class="btn s" id="editM">Editar</button>`:''}</div></div></div>`;
   if(din){const x=lucro(m,MES),l=leit(m,MES),md=media3(m,MES);
     h+=seletorMes()+`<div class="kpis"><div class="kpi"><div class="l">Receita ${nomeMes(MES)}</div><div class="v">${x?brl(x.rec):'—'}</div><div class="s">${MES===mesAtual()?'parcial':md?'média 3 meses: '+brl0(md):'—'}</div></div>
-     <div class="kpi"><div class="l">Pelúcias que saíram</div><div class="v">${x&&x.ps?x.ps.qtd:semPremio(m)?'—':'?'}</div><div class="s">${x&&x.ps?x.ps.fonte:semPremio(m)?'máquina sem prêmio':'registre a contagem na visita'}</div></div>
+     <div class="kpi"><div class="l">Prêmios que saíram</div><div class="v">${x&&x.ps?x.ps.qtd:semPremio(m)?'—':'?'}</div><div class="s">${x&&x.ps?x.ps.fonte:semPremio(m)?'máquina sem prêmio':'registre a contagem na visita'}</div></div>
      <div class="kpi r"><div class="l">Comissão do ponto</div><div class="v">${x?brl(x.com):'—'}</div><div class="s">${x&&x.pagaCom?'paga':'devida pelo combinado'}</div></div>
      <div class="kpi ${x&&x.lucro>=0?'g':'r'}"><div class="l">Lucro da máquina</div><div class="v">${x?brl(x.lucro):'—'}</div><div class="s">${x&&x.semCusto?'falta o custo das pelúcias':x&&x.rec?Math.round(x.lucro/x.rec*100)+'% da receita':''}</div></div></div>`;
     h+=`<div class="grid2"><div class="card"><h2>Lucro · ${nomeMes(MES)} ${parcial()}</h2>${x?linhasLucro(x):'<p class="sub">Sem dados no mês.</p>'}</div>`;
@@ -333,16 +336,16 @@ function formVisita(cod){
    <div><label>Máquina</label><select id="vMaq" required>${optMaq(cod,'Escolha a máquina')}</select></div>
    <div><label>Data</label><input id="vData" type="date" value="${hojeISO()}" max="${hojeISO()}" required></div>
    <p class="mini" id="vInfo"></p>
-   <div class="lin"><div><label>Pelúcias que estavam na máquina (contagem)</label><input id="vVis" type="number" min="0" inputmode="numeric"></div>
-   <div><label>Pelúcias que você colocou</label><input id="vRep" type="number" min="0" inputmode="numeric"></div></div>
+   <div class="lin"><div><label>Prêmios que estavam na máquina (contagem)</label><input id="vVis" type="number" min="0" inputmode="numeric"></div>
+   <div><label>Prêmios que você colocou</label><input id="vRep" type="number" min="0" inputmode="numeric"></div></div>
    <div><label>Dinheiro contado no cofre (R$)</label><input id="vRec" type="number" min="0" step="0.01" inputmode="decimal" placeholder="deixe vazio se não abriu o cofre"></div>
    <label class="chk"><input type="checkbox" id="vLim"> Fiz a limpeza da máquina</label>
    <div><label>Problema encontrado (se houver)</label><textarea id="vPro" rows="2" placeholder="Ex.: garra fraca, noteiro travado, luz apagada"></textarea></div>
    <label class="chk"><input type="checkbox" id="vPar"> A máquina ficou parada / precisa de manutenção</label>
    <div class="msg" id="vMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar visita</button></div></form>`,w=>{
    const info=()=>{const m=maq(w.querySelector('#vMaq').value);if(!m){w.querySelector('#vInfo').textContent='';return}const e=estoqueMaq(m);
-     const meu=((D.estoque||{}).pessoas||[]).find(x=>x.pessoa_id===D.eu.id&&x.produto===m.premio);
-     w.querySelector('#vInfo').textContent=semPremio(m)?'Máquina sem prêmio: só informe o dinheiro e o que encontrou.':`Prêmio: ${m.premio}. ${e?'Última contagem: '+e.qtd+' na máquina ('+dataBR(e.data)+').':'Ainda sem contagem nesta máquina.'}${meu?' Com você: '+num(meu.qtd)+'.':''}`};
+     const nomes=(m.itens||[]).map(i=>i.nome);const meu=((D.estoque||{}).pessoas||[]).filter(x=>x.pessoa_id===D.eu.id&&nomes.includes(x.produto)).map(x=>num(x.qtd)+' '+x.produto).join(', ');
+     w.querySelector('#vInfo').textContent=semPremio(m)?'Máquina sem prêmio: só informe o dinheiro e o que encontrou.':`Cada prêmio: ${(m.itens||[]).map(i=>num(i.qtd)+'× '+i.nome).join(' + ')||m.premio}. ${e?'Última contagem: '+e.qtd+' na máquina ('+dataBR(e.data)+').':'Ainda sem contagem nesta máquina.'}${meu?' Com você: '+meu+'.':''}`};
    w.querySelector('#vMaq').onchange=info;info();
    w.querySelector('#fv').onsubmit=async e=>{e.preventDefault();const g=id=>w.querySelector(id),n=id=>g(id).value===''?null:Number(g(id).value);
     g('#vMsg').textContent='Salvando…';
@@ -380,42 +383,71 @@ function formMaquina(m){const novo=!m;m=m||{codigo:'',tipo:'Garra',status:'Ativa
    <datalist id="donosM">${[...new Set(D.maquinas.map(x=>x.dono).filter(Boolean))].map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
    <div class="lin"><div><label>Comissão do ponto (%)</label><input id="mCp" type="number" min="0" max="100" step="0.01" value="${m.comissao_pct??''}" placeholder="ex.: 20"></div>
    <div><label>Aluguel fixo do ponto (R$/mês)</label><input id="mCf" type="number" min="0" step="0.01" value="${m.comissao_fixa??''}" placeholder="ex.: 300"></div></div>
-   <div class="lin"><div><label>Custo de cada pelúcia (R$)</label><input id="mCu" type="number" min="0" step="0.01" value="${m.custo_premio??''}" placeholder="vazio = custo médio do estoque"></div>
-   <div><label>Capacidade (pelúcias)</label><input id="mCap" type="number" min="0" value="${m.capacidade??''}"></div></div>
+   <div><label>O que sai em cada prêmio</label><div id="mItens" class="form" style="gap:6px"></div><button type="button" class="lnk" id="mAddItem">+ adicionar produto</button>
+   <p class="mini">Ex.: Caixa Surpresa = 1 caixinha + 1 brinde. Máquina sem prêmio (soco, basquete…): deixe vazio.</p></div>
+   <div class="lin"><div><label>Capacidade (prêmios)</label><input id="mCap" type="number" min="0" value="${m.capacidade??''}"></div><div></div></div>
    <div class="msg" id="mMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar</button></div></form>`,w=>{
-   const g=id=>w.querySelector(id).value;
+   const g=id=>w.querySelector(id).value;const box=w.querySelector('#mItens');
+   const linhaItem=(pid,q)=>{const d=document.createElement('div');d.className='lin';d.style.gridTemplateColumns='1fr 80px 30px';
+     d.innerHTML=`<select class="iP"><option value="">— produto —</option>${produtos().map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.nome)}</option>`).join('')}</select><input class="iQ" type="number" min="0.01" step="0.01" value="${q||1}"><button type="button" class="lnk" title="remover">×</button>`;
+     d.querySelector('button').onclick=()=>d.remove();box.appendChild(d)};
+   (m.itens||[]).forEach(i=>linhaItem(i.produto_id,i.qtd));if(!(m.itens||[]).length&&novo)linhaItem('',1);
+   w.querySelector('#mAddItem').onclick=()=>linhaItem('',1);
    w.querySelector('#fm').onsubmit=async e=>{e.preventDefault();w.querySelector('#mMsg').textContent='Salvando…';
     const d=await rpc('mvt_admin_maquina',{p_sessao:S(),p_novo:novo,p_codigo:g('#mCod'),p_tipo:g('#mTipo'),p_ponto:g('#mPon'),p_cidade:g('#mCid'),
       p_jogada:g('#mJog'),p_premio:g('#mPre'),p_dono:g('#mDon'),p_status:g('#mSt'),
-      p_comissao_pct:g('#mCp')===''?0:Number(g('#mCp')),p_comissao_fixa:g('#mCf')===''?0:Number(g('#mCf')),p_custo_premio:g('#mCu')===''?null:Number(g('#mCu')),p_capacidade:g('#mCap')===''?null:Number(g('#mCap'))});
-    if(d.erro){w.querySelector('#mMsg').textContent=d.erro;return}w.remove();await carregar(true);if(novo)location.hash='m/'+g('#mCod').trim().toUpperCase()}})}
+      p_comissao_pct:g('#mCp')===''?0:Number(g('#mCp')),p_comissao_fixa:g('#mCf')===''?0:Number(g('#mCf')),p_custo_premio:m.custo_premio??null,p_capacidade:g('#mCap')===''?null:Number(g('#mCap'))});
+    if(d.erro){w.querySelector('#mMsg').textContent=d.erro;return}
+    const itens=[...box.querySelectorAll('.lin')].map(l=>({produto_id:l.querySelector('.iP').value,qtd:Number(l.querySelector('.iQ').value)||1})).filter(i=>i.produto_id);
+    const r2=await rpc('mvt_admin_itens',{p_sessao:S(),p_codigo:g('#mCod').trim().toUpperCase(),p_itens:itens});if(r2.erro){w.querySelector('#mMsg').textContent=r2.erro;return}
+    w.remove();await carregar(true);if(novo)location.hash='m/'+g('#mCod').trim().toUpperCase()}})}
 
 // ---------- estoque (franqueador) ----------
 const TIPOS_MOV={compra:'Compra (entra no depósito)',entrega:'Entrega ao reabastecedor',devolucao:'Devolução ao depósito',ajuste_deposito:'Ajuste do depósito (contagem)',ajuste_pessoa:'Ajuste com a pessoa (contagem)'};
-function produtos(){return [...new Set([...D.maquinas.filter(m=>!semPremio(m)).map(m=>m.premio),...(D.estoque.deposito||[]).map(x=>x.produto)])].sort()}
+function produtos(){return ((D.estoque||{}).produtos||[]).filter(p=>p.ativo)}
 function telaEstoque(){const E=D.estoque||{deposito:[],pessoas:[],movimentos:[]};
   const naMaq=D.maquinas.filter(m=>!semPremio(m)).map(m=>({m,e:estoqueMaq(m)}));
   const totDep=E.deposito.reduce((s,x)=>s+num(x.qtd),0),totPes=E.pessoas.reduce((s,x)=>s+num(x.qtd),0),totMaq=naMaq.reduce((s,o)=>s+(o.e?o.e.qtd:0),0);
   const valor=E.deposito.reduce((s,x)=>s+num(x.qtd)*num(x.custo_medio),0);
   let h=`<div class="kpis"><div class="kpi"><div class="l">No depósito</div><div class="v">${totDep}</div><div class="s">${valor?'≈ '+brl(valor)+' a custo':'pelúcias'}</div></div>
-   <div class="kpi"><div class="l">Com reabastecedores</div><div class="v">${totPes}</div><div class="s">pelúcias</div></div>
+   <div class="kpi"><div class="l">Com reabastecedores</div><div class="v">${totPes}</div><div class="s">itens</div></div>
    <div class="kpi"><div class="l">Nas máquinas</div><div class="v">${totMaq}</div><div class="s">pela última contagem</div></div>
-   <div class="kpi"><div class="l">Total</div><div class="v">${totDep+totPes+totMaq}</div><div class="s">pelúcias na rede</div></div></div>
+   <div class="kpi"><div class="l">Total</div><div class="v">${totDep+totPes+totMaq}</div><div class="s">itens na rede</div></div></div>
    <div class="card"><h2>Movimentar<span class="acao" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-mov="compra">+ Compra</button><button class="btn s" data-mov="entrega">Entregar ao reabastecedor</button><button class="btn s" data-mov="devolucao">Devolução</button><button class="btn s" data-mov="ajuste_deposito">Ajuste</button></span></h2>
    <p class="sub">Compra entra no depósito com o custo de cada pelúcia (vira o custo médio usado no lucro). Entrega passa do depósito para o reabastecedor; o que ele coloca nas máquinas sai dele pelas visitas.</p></div>
-   <div class="grid2"><div class="card"><h2>Depósito</h2>${E.deposito.length?`<table><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Custo médio</th></tr>${E.deposito.map(x=>`<tr><td>${esc(x.produto)}</td><td class="r" style="${num(x.qtd)<0?'color:var(--rt)':''}">${num(x.qtd)}</td><td class="r">${x.custo_medio!=null?brl(x.custo_medio):'—'}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhuma compra registrada.</p>'}</div>
+   <div class="card"><h2>Produtos e insumos<button class="btn s acao" id="novoProd">+ Novo produto</button></h2>
+   <p class="sub" style="margin-bottom:8px">Tudo o que a MV Toy compra e sai nas máquinas: pelúcias, caixinhas, conteúdo das caixas, cartas… O custo cadastrado é o usado no lucro.</p>
+   ${(E.produtos||[]).length?`<div class="wrap"><table><tr><th>Produto</th><th class="cj">Categoria</th><th class="r">Custo</th><th class="r">No depósito</th><th class="r cj">Máquinas</th></tr>${(E.produtos||[]).map(p=>{const nm=D.maquinas.filter(m=>(m.itens||[]).some(i=>i.produto_id===p.id)).length;
+     return `<tr class="clic" data-prod="${p.id}"><td><b>${esc(p.nome)}</b>${p.ativo?'':' <span class="st off">inativo</span>'}<small>${esc(p.obs||'')}</small></td><td class="cj">${esc(p.categoria)}</td>
+     <td class="r">${p.custo!=null?brl(p.custo):'<span class="st y">falta</span>'}</td><td class="r">${num(p.deposito)}</td><td class="r cj">${nm||'—'}</td></tr>`}).join('')}</table></div>`:'<p class="sub">Nenhum produto cadastrado.</p>'}</div>
+   <div class="grid2"><div class="card"><h2>Depósito</h2>${E.deposito.length?`<table><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Custo</th></tr>${E.deposito.map(x=>`<tr><td>${esc(x.produto)}</td><td class="r" style="${num(x.qtd)<0?'color:var(--rt)':''}">${num(x.qtd)}</td><td class="r">${x.custo_medio!=null?brl(x.custo_medio):'—'}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhuma compra registrada.</p>'}</div>
    <div class="card"><h2>Com cada pessoa</h2>${E.pessoas.length?`<table><tr><th>Pessoa</th><th>Produto</th><th class="r">Qtd</th></tr>${E.pessoas.map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.produto)}</td><td class="r" style="${num(x.qtd)<0?'color:var(--rt)':''}">${num(x.qtd)}</td></tr>`).join('')}</table><p class="mini" style="margin-top:6px">Número negativo = colocou nas máquinas mais do que recebeu: falta registrar uma entrega ou fazer um ajuste.</p>`:'<p class="sub">Ninguém está com pelúcias registradas.</p>'}</div></div>
    <div class="card"><h2>Nas máquinas</h2><div class="wrap"><table><tr><th>Máquina</th><th>Prêmio</th><th class="r">Pelúcias</th><th class="r cj">Contagem</th></tr>${naMaq.sort((a,b)=>(a.e?a.e.qtd:-1)-(b.e?b.e.qtd:-1)).map(({m,e})=>`<tr class="clic" data-cod="${m.codigo}"><td><span class="mvt">${m.codigo}</span><small>${esc(m.ponto)}</small></td><td>${esc(m.premio)}</td>
    <td class="r">${e?e.qtd+(m.capacidade?`<small>de ${m.capacidade}</small>`:''):'<span class="st y">sem contagem</span>'}</td><td class="r cj">${e?dataBR(e.data):'—'}</td></tr>`).join('')}</table></div></div>
    <div class="card"><h2>Últimas movimentações</h2>${E.movimentos.length?`<div class="wrap"><table><tr><th>Data</th><th>Movimento</th><th class="r">Qtd</th><th></th></tr>${E.movimentos.map(x=>`<tr><td>${dataBR(x.data)}</td><td>${TIPOS_MOV[x.tipo]||x.tipo} · ${esc(x.produto)}<small>${[x.pessoa?esc(x.pessoa):'',x.custo_unit!=null?brl(x.custo_unit)+' cada':'',esc(x.obs||'')].filter(Boolean).join(' · ')}</small></td><td class="r">${x.qtd}</td><td class="r"><button class="lnk" data-dmov="${x.id}">apagar</button></td></tr>`).join('')}</table></div>`:'<p class="sub">Nenhuma movimentação.</p>'}</div>`;
-  $('#app').innerHTML=h}
+  $('#app').innerHTML=h;$('#novoProd').onclick=()=>formProduto(null)}
+document.addEventListener('click',e=>{const tr=e.target.closest('tr[data-prod]');if(tr)formProduto(((D.estoque||{}).produtos||[]).find(p=>p.id===tr.dataset.prod))});
+const CATS_PROD=['Pelúcia','Embalagem','Conteúdo de caixa','Carta colecionável','Capinha','Insumo','Outros'];
+function formProduto(p){const novo=!p;p=p||{nome:'',categoria:'Pelúcia',unidade:'un',custo:null,ativo:true,obs:''};
+  modal(`<h3>${novo?'Novo produto':esc(p.nome)}</h3><form class="form" id="fp">
+   <div><label>Nome</label><input id="pNome" required value="${esc(p.nome)}" placeholder="Ex.: Caixinha MV Caixa Surpresa"></div>
+   <div class="lin"><div><label>Categoria</label><input id="pCat" list="catsP" value="${esc(p.categoria)}"></div><div><label>Unidade</label><input id="pUn" value="${esc(p.unidade||'un')}"></div></div>
+   <datalist id="catsP">${CATS_PROD.map(c=>`<option value="${c}">`).join('')}</datalist>
+   <div class="lin"><div><label>Custo por unidade (R$)</label><input id="pCusto" type="number" min="0" step="0.01" inputmode="decimal" value="${p.custo??''}"></div>
+   <div><label>Situação</label><select id="pAt"><option value="1" ${p.ativo?'selected':''}>Ativo</option><option value="0" ${!p.ativo?'selected':''}>Inativo</option></select></div></div>
+   <div><label>Observação</label><input id="pObs" maxlength="140" value="${esc(p.obs||'')}" placeholder="fornecedor, tamanho…"></div>
+   <div class="msg" id="pMsg2"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar</button></div></form>`,w=>{
+   const g=id=>w.querySelector(id);g('#fp').onsubmit=async e=>{e.preventDefault();g('#pMsg2').textContent='Salvando…';
+    const d=await rpc('mvt_admin_produto',{p_sessao:S(),p_id:novo?null:p.id,p_nome:g('#pNome').value,p_categoria:g('#pCat').value,p_unidade:g('#pUn').value,
+      p_custo:g('#pCusto').value===''?null:Number(g('#pCusto').value),p_ativo:g('#pAt').value==='1',p_obs:g('#pObs').value});
+    if(d.erro){g('#pMsg2').textContent=d.erro;return}w.remove();carregar(true)}})}
 document.addEventListener('click',async e=>{const b=e.target.closest('button[data-mov]');if(b)formMov(b.dataset.mov);
   const d=e.target.closest('button[data-dmov]');if(d){if(!confirm('Apagar esta movimentação?'))return;const r=await rpc('mvt_apagar_mov',{p_sessao:S(),p_id:d.dataset.dmov});if(r.erro){alert(r.erro);return}carregar(true)}});
 function formMov(tipo){const pess=D.pessoas_estoque||[];
   modal(`<h3>Movimentar estoque</h3><form class="form" id="fe">
    <div><label>Tipo</label><select id="eTipo">${Object.entries(TIPOS_MOV).map(([k,v])=>`<option value="${k}" ${k===tipo?'selected':''}>${v}</option>`).join('')}</select></div>
-   <div class="lin"><div><label>Produto (prêmio)</label><input id="eProd" list="prodsE" required placeholder="Disney, Tradicional…"></div><div><label id="eQtdL">Quantidade</label><input id="eQtd" type="number" step="1" required inputmode="numeric"></div></div>
-   <datalist id="prodsE">${produtos().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+   <div><label>Produto</label><select id="eProd" required>${produtos().map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)} · ${esc(p.categoria)}</option>`).join('')}</select></div>
+   <div><label id="eQtdL">Quantidade</label><input id="eQtd" type="number" step="1" required inputmode="numeric"></div>
    <div id="eCustoW"><label>Custo de cada pelúcia (R$)</label><input id="eCusto" type="number" min="0" step="0.01" inputmode="decimal"></div>
    <div id="ePesW"><label>Pessoa</label><select id="ePes">${pess.map(p=>`<option value="${p.id}">${esc(p.nome)} · ${PAPEIS[p.papel]||p.papel}</option>`).join('')}</select></div>
    <div class="lin"><div><label>Data</label><input id="eData" type="date" value="${hojeISO()}" required></div><div><label>Observação</label><input id="eObs" maxlength="120" placeholder="fornecedor, nota…"></div></div>
@@ -423,6 +455,7 @@ function formMov(tipo){const pess=D.pessoas_estoque||[];
    const g=id=>w.querySelector(id);const vis=()=>{const t=g('#eTipo').value;g('#eCustoW').style.display=t==='compra'?'':'none';
      g('#ePesW').style.display=['entrega','devolucao','ajuste_pessoa'].includes(t)?'':'none';
      g('#eQtdL').textContent=t.startsWith('ajuste')?'Diferença (+ sobrou / − faltou)':'Quantidade'};vis();g('#eTipo').onchange=vis;
+   const pc=()=>{const p=produtos().find(x=>x.nome===g('#eProd').value);if(p&&p.custo!=null&&!g('#eCusto').value)g('#eCusto').placeholder='cadastrado: '+brl(p.custo)};pc();g('#eProd').onchange=pc;
    g('#fe').onsubmit=async e=>{e.preventDefault();g('#eMsg').textContent='Salvando…';
     const d=await rpc('mvt_salvar_mov',{p_sessao:S(),p_tipo:g('#eTipo').value,p_produto:g('#eProd').value,p_qtd:parseInt(g('#eQtd').value,10),
       p_custo:g('#eCusto').value===''?null:Number(g('#eCusto').value),p_pessoa:g('#ePes').value||null,p_data:g('#eData').value,p_obs:g('#eObs').value});
