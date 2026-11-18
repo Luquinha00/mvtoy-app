@@ -150,7 +150,7 @@ function telaInicio(){
   const c=contas(MES),ant=contas(mesAnterior(MES));const ativas=D.maquinas.filter(m=>m.status==='Ativa').length;
   const varp=(MES!==mesAtual()&&ant.fat>0)?(c.fat/ant.fat-1)*100:null;
   let h=seletorMes()+`<div class="kpis">
-   <div class="kpi"><div class="l">Faturamento ${nomeMes(MES)}</div><div class="v">${brl(c.fat)}</div><div class="s">${MES===mesAtual()?'parcial do mês':varp===null?'—':(varp>=0?'▲ ':'▼ ')+Math.abs(varp).toFixed(0)+'% vs mês anterior'}</div></div>
+   <div class="kpi"><div class="l">Receita ${nomeMes(MES)}</div><div class="v">${brl(c.fat)}</div><div class="s">${MES===mesAtual()?'parcial do mês':varp===null?'—':(varp>=0?'▲ ':'▼ ')+Math.abs(varp).toFixed(0)+'% vs mês anterior'}</div></div>
    <div class="kpi"><div class="l">Máquinas</div><div class="v">${D.maquinas.length}</div><div class="s">${ativas} ativas</div></div>
    <div class="kpi ${lucroRede(MES).lucro>=0?'g':'r'}"><div class="l">Lucro estimado</div><div class="v">${brl(lucroRede(MES).lucro)}</div><div class="s">${lucroRede(MES).falta?lucroRede(MES).falta+' máquina(s) sem custo de pelúcia':'faturamento − pelúcias − comissão − despesas'}</div></div>`;
   const res=D.resultados.filter(r=>String(r.mes).slice(0,10)===MES);
@@ -162,6 +162,13 @@ function telaInicio(){
     else if(m.status==='Ativa'){const f=fat(m,mf),md=media3(m,mf);if(f!==null&&md&&f<md*0.7)al.push(['y','▼',`<a class="mvt" href="#m/${m.codigo}">${m.codigo}</a> caiu ${Math.round((1-f/md)*100)}% em ${nomeMes(mf)} (${brl0(f)} vs média ${brl0(md)})`]);}});
   if(D.pode.visitar||D.eu.papel==='admin'){const sem=D.maquinas.filter(m=>m.status==='Ativa'&&(!m.ultima_visita||diasDesde(m.ultima_visita)>7));
     if(sem.length)al.push(['b','i',`${sem.length} máquina(s) ativas sem visita registrada nos últimos 7 dias. <a href="#visitas">Ver rota</a>`])}
+  const baixo=D.maquinas.filter(m=>m.status==='Ativa'&&!semPremio(m)).map(m=>({m,e:estoqueMaq(m)})).filter(o=>o.e&&(o.m.capacidade?o.e.qtd<o.m.capacidade*0.3:o.e.qtd<10));
+  if(baixo.length)al.push(['y','↓',`Pouca pelúcia: ${baixo.map(o=>`<a class="mvt" href="#m/${o.m.codigo}">${o.m.codigo}</a> (${o.e.qtd})`).join(', ')}`]);
+  if(D.eu.papel==='admin'){const semCom=D.maquinas.filter(m=>m.status==='Ativa'&&!num(m.comissao_pct)&&!num(m.comissao_fixa)).length;
+    const semCusto=D.maquinas.filter(m=>m.status==='Ativa'&&!semPremio(m)&&custoPremio(m)===null).length;
+    if(semCom||semCusto)al.push(['b','i',`Para o lucro ficar real: ${semCom?semCom+' máquina(s) sem comissão do ponto':''}${semCom&&semCusto?' e ':''}${semCusto?semCusto+' sem custo de pelúcia':''}. Cadastre em Editar na ficha da máquina${semCusto?' ou registre a compra no Estoque':''}.`])}
+  const semCont=D.maquinas.filter(m=>m.status==='Ativa'&&num((leit(m,ultimoMesFechado())||{}).dinheiro)>0&&!D.visitas.some(v=>v.codigo===m.codigo&&v.recolhido!=null&&diasDesde(v.data)<=31));
+  if(semCont.length&&D.pode.visitar)al.push(['y','R$',`${semCont.length} máquina(s) recebem dinheiro e estão sem contagem do cofre há mais de 30 dias.`]);
   const prev=D.lancamentos.filter(l=>l.status==='previsto'&&l.tipo==='saida');
   if(prev.length)al.push(['y','$',`${prev.length} conta(s) previstas a pagar, total ${brl(prev.reduce((s,l)=>s+num(l.valor),0))}. <a href="#financeiro">Abrir financeiro</a>`]);
   h+=`<div class="grid2"><div class="card"><h2>Alertas</h2>${al.length?al.map(([c,i,t])=>`<div class="alerta"><i class="${c}">${i}</i><div>${t}</div></div>`).join(''):'<p class="sub">Tudo em ordem por aqui.</p>'}</div>`;
@@ -170,7 +177,7 @@ function telaInicio(){
   const linha=x=>`<tr class="clic" data-cod="${x.m.codigo}"><td><span class="mvt">${x.m.codigo}</span><small>${esc(x.m.tipo)} · ${esc(x.m.ponto)}</small></td><td class="r">${brl(x.f)}<div class="bar"><i style="width:${Math.round(x.f/mx*100)}%"></i></div></td></tr>`;
   h+=`<div class="card"><h2>Mais fortes · ${nomeMes(MES)} ${parcial()}</h2><table>${lin.slice(0,5).map(linha).join('')||'<tr><td class="sub">Sem dados no mês.</td></tr>'}</table>
    ${lin.length>5?`<h2 style="margin-top:14px">Mais fracas</h2><table>${lin.slice(-3).reverse().map(linha).join('')}</table>`:''}</div></div>`;
-  h+=`<p class="nota y"><b>Sobre os dados:</b> faturamento bruto da telemetria PagPlush (dinheiro + Pix + débito + crédito) por mês. Custos e repasses aparecem quando lançados no Financeiro.</p>`;
+  h+=`<p class="nota y"><b>Sobre os dados:</b> cartão, Pix e remoto vêm da telemetria PagPlush; o dinheiro vale a contagem do cofre (sem contagem, usa a telemetria). O lucro desconta pelúcias, comissão do ponto e despesas lançadas.</p>`;
   $('#app').innerHTML=h}
 
 // ---------- rota do reabastecedor ----------
@@ -280,7 +287,7 @@ function telaFinanceiro(){const c=contas(MES);const lm=lancMes(MES);const LR=luc
   const res=D.resultados.filter(r=>String(r.mes).slice(0,10)===MES);
   if(res.length)h+=`<div class="card"><h2>Fechamento das sociedades · ${nomeMes(MES)}</h2><div class="wrap"><table><tr><th>Sociedade</th><th class="r">Faturamento</th><th class="r">Resultado</th><th class="r">Parte do investidor</th><th class="r cj">Rendimento</th></tr>`+
     res.map(r=>`<tr><td>${esc(r.sociedade)}<small>${esc(r.documento||'')}</small></td><td class="r">${brl(r.faturamento)}</td><td class="r">${brl(r.resultado)}</td><td class="r"><b style="color:var(--vd)">${brl(r.parte_investidor)}</b></td><td class="r cj">${String(r.rendimento_pct).replace('.',',')}%</td></tr>`).join('')+`</table></div><p class="mini" style="margin-top:6px">O fechamento completo, com os comprovantes, é enviado todo dia 10.</p></div>`;
-  h+=`<div class="card"><h2>Lucro por máquina · ${nomeMes(MES)} ${parcial()}</h2><div class="wrap"><table><tr><th>Máquina</th><th class="r">Receita</th><th class="r cj">Pelúcias</th><th class="r cj">Comissão</th><th class="r cj">Outras</th><th class="r">Lucro</th></tr>`+
+  h+=`<div class="card"><h2>Lucro por máquina · ${nomeMes(MES)} ${parcial()}<button class="btn s acao" id="csv">Baixar planilha</button></h2><div class="wrap"><table><tr><th>Máquina</th><th class="r">Receita</th><th class="r cj">Pelúcias</th><th class="r cj">Comissão</th><th class="r cj">Outras</th><th class="r">Lucro</th></tr>`+
     xs.sort((a,b)=>b.x.lucro-a.x.lucro).map(({m,x})=>`<tr class="clic" data-cod="${m.codigo}"><td><span class="mvt">${m.codigo}</span><small>${esc(m.ponto)}</small></td><td class="r">${brl0(x.rec)}</td>
     <td class="r cj">${x.custoP===null?'<span class="st y">?</span>':x.custoP?brl0(x.custoP):'—'}</td><td class="r cj">${x.com?brl0(x.com):'—'}</td><td class="r cj">${x.outras?brl0(x.outras):'—'}</td>
     <td class="r" style="color:${x.lucro>=0?'var(--vd)':'var(--rt)'}"><b>${brl0(x.lucro)}</b></td></tr>`).join('')+`</table></div>
@@ -289,7 +296,12 @@ function telaFinanceiro(){const c=contas(MES);const lm=lancMes(MES);const LR=luc
   const prev=D.lancamentos.filter(l=>l.status==='previsto').sort((a,b)=>String(a.data).localeCompare(String(b.data)));
   if(prev.length)h+=`<div class="card"><h2>Contas a pagar (todos os meses)</h2>${tabelaLanc(prev,true)}</div>`;
   h+=`<p class="nota">Cartão, Pix e remoto vêm da telemetria; o dinheiro vale a contagem do cofre. Compras de pelúcias entram no Estoque (não precisa lançar de novo aqui). Os meses fechados antes de nov/26 estão nos PDFs de fechamento.</p>`;
-  $('#app').innerHTML=h;if($('#novoL'))$('#novoL').onclick=()=>formLanc(null)}
+  $('#app').innerHTML=h;if($('#novoL'))$('#novoL').onclick=()=>formLanc(null);
+  $('#csv').onclick=()=>{const f=v=>String(Math.round(num(v)*100)/100).replace('.',',');
+    const linhas=[['Máquina','Ponto','Cidade','Cartão/Pix/remoto','Dinheiro telemetria','Dinheiro contado','Receita','Pelúcias saídas','Custo pelúcias','Comissão','Outras despesas','Outras entradas','Lucro']]
+      .concat(xs.map(({m,x})=>[m.codigo,m.ponto,m.cidade,f(x.eletr),x.dinTel===null?'':f(x.dinTel),x.dinCont===null?'':f(x.dinCont),f(x.rec),x.ps?x.ps.qtd:'',x.custoP===null?'':f(x.custoP),f(x.com),f(x.outras),f(x.ent),f(x.lucro)]));
+    const csv='\ufeff'+linhas.map(l=>l.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(';')).join('\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='MVToy_lucro_'+MES.slice(0,7)+'.csv';a.click()}}
 
 // ---------- visitas ----------
 function tabelaVisitas(vs,comMaq){if(!vs.length)return '<p class="sub">Nenhuma visita registrada.</p>';
