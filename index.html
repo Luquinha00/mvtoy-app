@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>MV Toy · Minhas Máquinas</title>
-<link rel="icon" href="icon-192.png">
+<link rel="icon" href="favicon-32.png">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#4A37B5">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -20,7 +20,7 @@
 body{font-family:Poppins,system-ui,sans-serif;background:var(--bg);color:var(--mar);min-height:100vh}
 .top{background:radial-gradient(120% 120% at 80% 0%,#5B47D0 0%,var(--roxo) 45%,var(--rxe) 85%);color:#fff;padding:18px 16px 70px;position:relative}
 .top .in{max-width:980px;margin:0 auto;display:flex;align-items:center;gap:14px}
-.top img.logo{height:46px}
+.top img.logo{height:58px}
 .top .who{margin-left:auto;text-align:right;font-size:13px;opacity:.95}
 .top .who b{display:block;font-size:16px}
 .badge{display:inline-block;background:var(--am);color:var(--mar);font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;margin-top:4px;text-transform:uppercase;letter-spacing:.05em}
@@ -53,7 +53,7 @@ td small{display:block;color:var(--cz);font-size:11px}
 .res div{background:var(--bg);border-radius:12px;padding:12px}
 .res b{font-size:20px;color:var(--vd);display:block}
 .empty{text-align:center;padding:50px 16px;color:var(--cz)}
-.empty img{width:120px;margin-bottom:10px}
+.empty img{width:150px;margin-bottom:10px}
 footer{text-align:center;font-size:11px;color:var(--cz);padding:10px 16px 30px;letter-spacing:.05em}
 .wrap{overflow-x:auto}
 .inst{display:none;align-items:center;gap:12px;background:#fff;border:1px solid var(--ln);border-radius:16px;padding:12px 14px;margin-bottom:14px;box-shadow:0 4px 18px rgba(33,28,94,.06)}
@@ -62,37 +62,81 @@ footer{text-align:center;font-size:11px;color:var(--cz);padding:10px 16px 30px;l
 .inst .x{background:none;font-size:18px;padding:4px 8px;color:var(--cz)}
 .cola{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 .cola input{font:inherit;font-size:13px;flex:1;min-width:220px;max-width:420px;border:1px solid var(--ln);border-radius:12px;padding:9px 12px}
+.login{max-width:400px;margin:0 auto;text-align:center}
+.login h2{font-size:20px;margin:6px 0 4px}.login p.sub{font-size:13px;color:var(--cz);margin-bottom:16px;line-height:1.5}
+.login form{display:flex;flex-direction:column;gap:10px;text-align:left}
+.login label{font-size:12px;font-weight:600;color:var(--cz)}
+.login input{font:inherit;font-size:15px;border:1px solid var(--ln);border-radius:12px;padding:11px 12px;width:100%}
+.login input[readonly]{background:var(--bg);color:var(--cz)}
+.login button[type=submit]{font:inherit;font-weight:700;font-size:15px;background:var(--am);color:var(--mar);border:0;border-radius:12px;padding:12px;cursor:pointer;margin-top:6px}
+.login .msg{font-size:13px;color:#9B241B;min-height:18px}.login .dica{font-size:12px;color:var(--cz);margin-top:14px;line-height:1.5}
+.sair{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.35);font:inherit;font-size:11px;border-radius:12px;padding:2px 10px;margin-left:6px;cursor:pointer}
 @media(max-width:560px){.top .who{font-size:12px}.kpi .v{font-size:20px}td,th{padding:8px 4px}.cj{display:none}.kpis{grid-template-columns:1fr 1fr}.kpi.g{grid-column:1/-1}}
 </style>
 </head>
 <body>
-<div class="top"><div class="in"><img class="logo" src="logo.png" alt="MV Toy"><div class="who" id="who"></div></div></div>
-<main><div class="inst" id="inst"><img src="icon-192.png" alt=""><p id="instTxt"><b>Instale o app MV Toy</b><br>Acompanhe suas máquinas direto da tela inicial do celular.</p><button id="instBtn">Instalar</button><button class="x" id="instX" aria-label="Fechar">×</button></div><div id="app"><div class="card empty"><img src="mascote.png" alt=""><p>Carregando suas máquinas…</p></div></div></main>
-<footer>MV TOY · TECNOLOGIA E ENTRETENIMENTO · GRUPO MUNDO VIRTUAL<br>Dados da telemetria PagPlush · uso restrito do titular deste link</footer>
+<div class="top"><div class="in"><img class="logo" src="marca/logo-h.png" alt="MV Toy"><div class="who" id="who"></div></div></div>
+<main><div class="inst" id="inst"><img src="icon-192.png" alt=""><p id="instTxt"><b>Instale o app MV Toy</b><br>Acompanhe suas máquinas direto da tela inicial do celular.</p><button id="instBtn">Instalar</button><button class="x" id="instX" aria-label="Fechar">×</button></div><div id="app"><div class="card empty"><img src="marca/mestrinho.png" alt=""><p>Carregando suas máquinas…</p></div></div></main>
+<footer>MV TOY · TECNOLOGIA E ENTRETENIMENTO · GRUPO MUNDO VIRTUAL<br>Dados da telemetria PagPlush · acesso pessoal e intransferível</footer>
 <script>
 const URL_SB='https://koxormltidkmdwxgqbsm.supabase.co', KEY='sb_publishable_J7Ps1yZ4BPvFMof7coAAuQ_xO4I5QIe';
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const brl=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const nomeMes=m=>{const d=new Date(m+'T12:00:00');return MESES[d.getMonth()]+'/'+String(d.getFullYear()).slice(2)};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function token(){const h=new URLSearchParams(location.hash.slice(1));let k=h.get('k');
-  if(!k){const q=new URLSearchParams(location.search);k=q.get('k');}
-  try{if(k)localStorage.setItem('mvt_k',k);else k=localStorage.getItem('mvt_k')}catch(e){}
-  return k}
-function vazio(msg,cola){document.getElementById('app').innerHTML=`<div class="card empty"><img src="mascote.png" alt=""><p>${msg}</p>${cola?`<div class="cola"><input id="link" placeholder="Cole aqui o seu link de acesso" autocomplete="off"><button id="entrar">Entrar</button></div>`:''}</div>`}
-document.addEventListener('click',e=>{if(e.target.id==='entrar'){const v=(document.getElementById('link').value||'').trim();const m=v.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);if(!m){alert('Link não reconhecido. Copie o link completo que a MV Toy enviou.');return}try{localStorage.setItem('mvt_k',m[0])}catch(_){};location.hash='k='+m[0]}});
-async function init(){
-  const k=token();
-  if(!k||!/^[0-9a-f-]{36}$/i.test(k)){vazio('Este é o painel de máquinas da MV Toy.<br>Abra pelo link pessoal que você recebeu da MV Toy ou cole o link abaixo.',true);return}
-  let d;
-  try{const r=await fetch(URL_SB+'/rest/v1/rpc/mvt_portal',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({p_token:k})});d=await r.json()}
-  catch(e){vazio('Não foi possível carregar agora. Tente de novo em instantes.');return}
-  if(!d||d.erro){try{localStorage.removeItem('mvt_k')}catch(e){};vazio(esc(d&&d.erro||'Link inválido.'));return}
+const SESS='mvt_sess';
+const rpc=async(fn,body)=>{const r=await fetch(URL_SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});return r.json()};
+const ls={get:k=>{try{return localStorage.getItem(k)}catch(_){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}},del:k=>{try{localStorage.removeItem(k)}catch(_){}}};
+function linkToken(){const h=new URLSearchParams(location.hash.slice(1));let k=h.get('k')||new URLSearchParams(location.search).get('k')||ls.get('mvt_k');
+  return k&&/^[0-9a-f-]{36}$/i.test(k)?k:null}
+function limpaLink(){ls.del('mvt_k');if(location.hash||location.search)history.replaceState(null,'',location.pathname)}
+function vazio(msg){document.getElementById('app').innerHTML=`<div class="card empty"><img src="marca/mestrinho.png" alt=""><p>${msg}</p></div>`}
+function telaLogin(email,msg){
+  document.getElementById('who').innerHTML='';
+  document.getElementById('app').innerHTML=`<div class="card"><div class="login"><img src="marca/mestrinho.png" alt="" style="width:110px">
+  <h2>Entrar no painel MV Toy</h2><p class="sub">Acompanhe as suas máquinas com e-mail e senha.</p>
+  <form id="fLogin"><div><label>E-mail</label><input id="lEmail" type="email" autocomplete="username" required value="${esc(email||'')}"></div>
+  <div><label>Senha</label><input id="lSenha" type="password" autocomplete="current-password" required></div>
+  <div class="msg" id="lMsg">${esc(msg||'')}</div><button type="submit">Entrar</button></form>
+  <p class="dica"><b>Primeiro acesso ou esqueceu a senha?</b><br>Abra uma vez o link pessoal que a MV Toy enviou: ele pede para você criar a sua senha.</p></div></div>`;
+  document.getElementById('fLogin').onsubmit=async e=>{e.preventDefault();const m=document.getElementById('lMsg');m.textContent='Entrando…';
+    try{const d=await rpc('mvt_login',{p_email:document.getElementById('lEmail').value,p_senha:document.getElementById('lSenha').value});
+      if(d.erro){m.textContent=d.erro;return}ls.set(SESS,d.sessao);carregar()}catch(_){m.textContent='Sem conexão. Tente de novo.'}}}
+function telaCriar(k,email,trocar){
+  document.getElementById('who').innerHTML='';
+  document.getElementById('app').innerHTML=`<div class="card"><div class="login"><img src="marca/mestrinho.png" alt="" style="width:110px">
+  <h2>${trocar?'Trocar a sua senha':'Crie o seu login'}</h2><p class="sub">${trocar?'Defina uma nova senha para entrar no painel.':'Depois disso você entra só com e-mail e senha, sem precisar do link.'}</p>
+  <form id="fCriar"><div><label>E-mail</label><input id="cEmail" type="email" autocomplete="username" readonly value="${esc(email)}"></div>
+  <div><label>Nova senha (mínimo 8 caracteres)</label><input id="cSenha" type="password" autocomplete="new-password" minlength="8" required></div>
+  <div><label>Repita a senha</label><input id="cSenha2" type="password" autocomplete="new-password" minlength="8" required></div>
+  <div class="msg" id="cMsg"></div><button type="submit">${trocar?'Salvar nova senha':'Criar login e entrar'}</button></form>
+  ${trocar?'<p class="dica"><a href="#" id="jaSei">Lembrei a senha, quero só entrar</a></p>':''}</div></div>`;
+  if(trocar)document.getElementById('jaSei').onclick=e=>{e.preventDefault();limpaLink();telaLogin(email)};
+  document.getElementById('fCriar').onsubmit=async e=>{e.preventDefault();const m=document.getElementById('cMsg');
+    const a=document.getElementById('cSenha').value,b=document.getElementById('cSenha2').value;
+    if(a!==b){m.textContent='As duas senhas não são iguais.';return}m.textContent='Salvando…';
+    try{const d=await rpc('mvt_definir_senha',{p_token:k,p_email:email,p_senha:a});if(d.erro){m.textContent=d.erro;return}
+      ls.set(SESS,d.sessao);limpaLink();carregar()}catch(_){m.textContent='Sem conexão. Tente de novo.'}}}
+async function carregar(){
+  const s=ls.get(SESS);
+  if(!s){init();return}
+  let d;try{d=await rpc('mvt_portal_sessao',{p_sessao:s})}catch(e){vazio('Não foi possível carregar agora. Tente de novo em instantes.');return}
+  if(!d||d.erro){ls.del(SESS);telaLogin('',d&&d.erro);return}
   render(d)}
+async function sair(){const s=ls.get(SESS);ls.del(SESS);try{if(s)await rpc('mvt_logout',{p_sessao:s})}catch(_){}D=null;MES=null;telaLogin('')}
+async function init(){
+  const k=linkToken();
+  if(k){let i;try{i=await rpc('mvt_link_info',{p_token:k})}catch(_){vazio('Sem conexão. Tente de novo.');return}
+    if(i.erro){limpaLink();telaLogin('',i.erro);return}
+    if(!i.tem_senha){telaCriar(k,i.email,false);return}
+    if(ls.get(SESS)){limpaLink();carregar();return}
+    telaCriar(k,i.email,true);return}
+  if(ls.get(SESS)){carregar();return}
+  telaLogin('')}
 let D,MES;
 function render(d){D=d;
   const papel={socio:'Sócio',investidor:'Investidor',admin:'Administrador'}[d.papel]||d.papel;
-  document.getElementById('who').innerHTML=`Olá,<b>${esc(d.nome)}</b><span class="badge">${papel}</span>`;
+  document.getElementById('who').innerHTML=`Olá,<b>${esc(d.nome)}</b><span class="badge">${papel}</span><button class="sair" id="btnSair">Sair</button>`;document.getElementById('btnSair').onclick=sair;
   const meses=[...new Set(d.maquinas.flatMap(m=>m.leituras.map(l=>l.mes)))].sort();
   if(!d.maquinas.length){vazio('Olá, '+esc(d.nome)+'! Suas máquinas ainda estão sendo vinculadas ao painel.<br>Assim que estiverem cadastradas, elas aparecem aqui.');return}
   MES=MES||meses[meses.length-1];
@@ -123,7 +167,7 @@ function draw(meses){const d=D;
   h+=`</table></div></div><div class="nota y"><b>Sobre os dados:</b> faturamento bruto da telemetria PagPlush (dinheiro + Pix + débito + crédito) do 1º ao último dia do mês. Em breve o painel passa a atualizar em tempo real.</div>`;
   document.getElementById('app').innerHTML=h}
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(b){MES=b.dataset.m;draw(window.MESES_LIST)}});
-window.addEventListener('hashchange',()=>location.reload());
+window.addEventListener('hashchange',()=>{if(linkToken())init()});
 init();
 // ---- app instalável (PWA) ----
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
