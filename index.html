@@ -70,6 +70,8 @@ footer{text-align:center;font-size:11px;color:var(--cz);padding:10px 16px 30px;l
 .login input[readonly]{background:var(--bg);color:var(--cz)}
 .login button[type=submit]{font:inherit;font-weight:700;font-size:15px;background:var(--am);color:var(--mar);border:0;border-radius:12px;padding:12px;cursor:pointer;margin-top:6px}
 .login .msg{font-size:13px;color:#9B241B;min-height:18px}.login .dica{font-size:12px;color:var(--cz);margin-top:14px;line-height:1.5}
+.ab{font:inherit;font-size:12px;border:1px solid var(--ln);background:#fff;color:var(--mar);border-radius:10px;padding:6px 12px;cursor:pointer}
+#adm input,#adm select{font:inherit;font-size:14px;border:1px solid var(--ln);border-radius:10px;padding:8px 10px}
 .sair{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.35);font:inherit;font-size:11px;border-radius:12px;padding:2px 10px;margin-left:6px;cursor:pointer}
 @media(max-width:560px){.top .who{font-size:12px}.kpi .v{font-size:20px}td,th{padding:8px 4px}.cj{display:none}.kpis{grid-template-columns:1fr 1fr}.kpi.g{grid-column:1/-1}}
 </style>
@@ -87,8 +89,6 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const SESS='mvt_sess';
 const rpc=async(fn,body)=>{const r=await fetch(URL_SB+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});return r.json()};
 const ls={get:k=>{try{return localStorage.getItem(k)}catch(_){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}},del:k=>{try{localStorage.removeItem(k)}catch(_){}}};
-function linkToken(){const h=new URLSearchParams(location.hash.slice(1));let k=h.get('k')||new URLSearchParams(location.search).get('k')||ls.get('mvt_k');
-  return k&&/^[0-9a-f-]{36}$/i.test(k)?k:null}
 function limpaLink(){ls.del('mvt_k');if(location.hash||location.search)history.replaceState(null,'',location.pathname)}
 function vazio(msg){document.getElementById('app').innerHTML=`<div class="card empty"><img src="marca/mestrinho.png" alt=""><p>${msg}</p></div>`}
 function telaLogin(email,msg){
@@ -98,25 +98,34 @@ function telaLogin(email,msg){
   <form id="fLogin"><div><label>E-mail</label><input id="lEmail" type="email" autocomplete="username" required value="${esc(email||'')}"></div>
   <div><label>Senha</label><input id="lSenha" type="password" autocomplete="current-password" required></div>
   <div class="msg" id="lMsg">${esc(msg||'')}</div><button type="submit">Entrar</button></form>
-  <p class="dica"><b>Primeiro acesso ou esqueceu a senha?</b><br>Abra uma vez o link pessoal que a MV Toy enviou: ele pede para você criar a sua senha.</p></div></div>`;
+  <p class="dica"><b>Primeiro acesso ou esqueceu a senha?</b><br><a href="#" id="lPrim">Receber um código no meu e-mail</a> e criar a senha.</p></div></div>`;
   document.getElementById('fLogin').onsubmit=async e=>{e.preventDefault();const m=document.getElementById('lMsg');m.textContent='Entrando…';
     try{const d=await rpc('mvt_login',{p_email:document.getElementById('lEmail').value,p_senha:document.getElementById('lSenha').value});
-      if(d.erro){m.textContent=d.erro;return}ls.set(SESS,d.sessao);carregar()}catch(_){m.textContent='Sem conexão. Tente de novo.'}}}
-function telaCriar(k,email,trocar){
+      if(d.erro){m.textContent=d.erro;return}ls.set(SESS,d.sessao);carregar()}catch(_){m.textContent='Sem conexão. Tente de novo.'}};
+  document.getElementById('lPrim').onclick=e=>{e.preventDefault();telaCodigo(document.getElementById('lEmail').value)}}
+function telaCodigo(email){
   document.getElementById('who').innerHTML='';
   document.getElementById('app').innerHTML=`<div class="card"><div class="login"><img src="marca/mestrinho.png" alt="" style="width:110px">
-  <h2>${trocar?'Trocar a sua senha':'Crie o seu login'}</h2><p class="sub">${trocar?'Defina uma nova senha para entrar no painel.':'Depois disso você entra só com e-mail e senha, sem precisar do link.'}</p>
-  <form id="fCriar"><div><label>E-mail</label><input id="cEmail" type="email" autocomplete="username" readonly value="${esc(email)}"></div>
-  <div><label>Nova senha (mínimo 8 caracteres)</label><input id="cSenha" type="password" autocomplete="new-password" minlength="8" required></div>
-  <div><label>Repita a senha</label><input id="cSenha2" type="password" autocomplete="new-password" minlength="8" required></div>
-  <div class="msg" id="cMsg"></div><button type="submit">${trocar?'Salvar nova senha':'Criar login e entrar'}</button></form>
-  ${trocar?'<p class="dica"><a href="#" id="jaSei">Lembrei a senha, quero só entrar</a></p>':''}</div></div>`;
-  if(trocar)document.getElementById('jaSei').onclick=e=>{e.preventDefault();limpaLink();telaLogin(email)};
-  document.getElementById('fCriar').onsubmit=async e=>{e.preventDefault();const m=document.getElementById('cMsg');
-    const a=document.getElementById('cSenha').value,b=document.getElementById('cSenha2').value;
+  <h2>Primeiro acesso ou nova senha</h2><p class="sub">Digite o e-mail liberado pela MV Toy. Vamos mandar um código de 6 números para ele.</p>
+  <form id="fPed"><div><label>E-mail</label><input id="pEmail" type="email" autocomplete="username" required value="${esc(email||'')}"></div>
+  <div class="msg" id="pMsg"></div><button type="submit">Enviar código</button></form>
+  <form id="fCod" style="display:none;margin-top:6px"><div><label>Código recebido no e-mail</label><input id="kCod" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></div>
+  <div><label>Nova senha (mínimo 8 caracteres)</label><input id="kSenha" type="password" autocomplete="new-password" minlength="8" required></div>
+  <div><label>Repita a senha</label><input id="kSenha2" type="password" autocomplete="new-password" minlength="8" required></div>
+  <div class="msg" id="kMsg"></div><button type="submit">Salvar senha e entrar</button></form>
+  <p class="dica"><a href="#" id="pVolta">Voltar para o login</a></p></div></div>`;
+  const em=()=>document.getElementById('pEmail').value.trim();
+  document.getElementById('pVolta').onclick=e=>{e.preventDefault();telaLogin(em())};
+  document.getElementById('fPed').onsubmit=async e=>{e.preventDefault();const m=document.getElementById('pMsg');m.style.color='';m.textContent='Enviando…';
+    try{const d=await rpc('mvt_pedir_codigo',{p_email:em()});if(d.erro){m.textContent=d.erro;return}
+      m.style.color='#14653A';m.textContent='Se este e-mail tiver acesso liberado, o código chega em instantes (veja também o spam). Ele vale 15 minutos.';
+      document.getElementById('pEmail').readOnly=true;document.getElementById('fCod').style.display='flex';document.getElementById('fCod').style.flexDirection='column';document.getElementById('fCod').style.gap='10px';
+      e.target.querySelector('button').textContent='Reenviar código';document.getElementById('kCod').focus()}catch(_){m.textContent='Sem conexão. Tente de novo.'}};
+  document.getElementById('fCod').onsubmit=async e=>{e.preventDefault();const m=document.getElementById('kMsg');
+    const a=document.getElementById('kSenha').value,b=document.getElementById('kSenha2').value;
     if(a!==b){m.textContent='As duas senhas não são iguais.';return}m.textContent='Salvando…';
-    try{const d=await rpc('mvt_definir_senha',{p_token:k,p_email:email,p_senha:a});if(d.erro){m.textContent=d.erro;return}
-      ls.set(SESS,d.sessao);limpaLink();carregar()}catch(_){m.textContent='Sem conexão. Tente de novo.'}}}
+    try{const d=await rpc('mvt_confirmar_codigo',{p_email:em(),p_codigo:document.getElementById('kCod').value,p_senha:a});if(d.erro){m.textContent=d.erro;return}
+      ls.set(SESS,d.sessao);carregar()}catch(_){m.textContent='Sem conexão. Tente de novo.'}}}
 async function carregar(){
   const s=ls.get(SESS);
   if(!s){init();return}
@@ -124,21 +133,13 @@ async function carregar(){
   if(!d||d.erro){ls.del(SESS);telaLogin('',d&&d.erro);return}
   render(d)}
 async function sair(){const s=ls.get(SESS);ls.del(SESS);try{if(s)await rpc('mvt_logout',{p_sessao:s})}catch(_){}D=null;MES=null;telaLogin('')}
-async function init(){
-  const k=linkToken();
-  if(k){let i;try{i=await rpc('mvt_link_info',{p_token:k})}catch(_){vazio('Sem conexão. Tente de novo.');return}
-    if(i.erro){limpaLink();telaLogin('',i.erro);return}
-    if(!i.tem_senha){telaCriar(k,i.email,false);return}
-    if(ls.get(SESS)){limpaLink();carregar();return}
-    telaCriar(k,i.email,true);return}
-  if(ls.get(SESS)){carregar();return}
-  telaLogin('')}
+function init(){limpaLink();if(ls.get(SESS)){carregar();return}telaLogin('')}
 let D,MES;
 function render(d){D=d;
   const papel={socio:'Sócio',investidor:'Investidor',admin:'Administrador'}[d.papel]||d.papel;
   document.getElementById('who').innerHTML=`Olá,<b>${esc(d.nome)}</b><span class="badge">${papel}</span><button class="sair" id="btnSair">Sair</button>`;document.getElementById('btnSair').onclick=sair;
   const meses=[...new Set(d.maquinas.flatMap(m=>m.leituras.map(l=>l.mes)))].sort();
-  if(!d.maquinas.length){vazio('Olá, '+esc(d.nome)+'! Suas máquinas ainda estão sendo vinculadas ao painel.<br>Assim que estiverem cadastradas, elas aparecem aqui.');return}
+  if(!d.maquinas.length){vazio('Olá, '+esc(d.nome)+'! Suas máquinas ainda estão sendo vinculadas ao painel.<br>Assim que estiverem cadastradas, elas aparecem aqui.');adminPainel();return}
   MES=MES||meses[meses.length-1];
   draw(meses)}
 function draw(meses){const d=D;
@@ -165,9 +166,27 @@ function draw(meses){const d=D;
     <td>${esc(m.ponto)}<small>${esc(m.cidade)}</small></td><td class="r cj">${esc(m.jogada)}</td>
     <td class="r">${f===null?'<small>sem dado</small>':brl(f)+(dv===null?'':`<small style="color:${dv>=0?'#14653A':'#9B241B'}">${dv>=0?'▲':'▼'} ${Math.abs(dv).toFixed(0)}%</small>`)}<div class="bar"><i style="width:${f?Math.round(f/mx*100):0}%"></i></div></td></tr>`});
   h+=`</table></div></div><div class="nota y"><b>Sobre os dados:</b> faturamento bruto da telemetria PagPlush (dinheiro + Pix + débito + crédito) do 1º ao último dia do mês. Em breve o painel passa a atualizar em tempo real.</div>`;
-  document.getElementById('app').innerHTML=h}
+  document.getElementById('app').innerHTML=h;adminPainel()}
+const PAPEIS={admin:'Administrador',socio:'Sócio',investidor:'Investidor'};
+async function adminPainel(){if(!D||D.papel!=='admin')return;
+  const box=document.createElement('div');box.className='card';box.id='adm';document.getElementById('app').appendChild(box);
+  const lista=await rpc('mvt_admin_listar',{p_sessao:ls.get(SESS)});if(!Array.isArray(lista)){box.remove();return}
+  const op=p=>Object.entries(PAPEIS).map(([k,v])=>`<option value="${k}"${k===p?' selected':''}>${v}</option>`).join('');
+  box.innerHTML=`<h2>Acessos ao painel</h2><p class="sub" style="font-size:12.5px;color:var(--cz);margin-bottom:10px">Libere o e-mail aqui. A pessoa entra em <b>Primeiro acesso</b>, recebe um código no e-mail e cria a própria senha.</p>
+  <div class="wrap"><table><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Situação</th><th></th></tr>`+lista.map(u=>`<tr data-id="${u.id}"><td>${esc(u.nome)}</td><td>${esc(u.email)}</td><td>${PAPEIS[u.papel]||esc(u.papel)}</td>
+  <td>${!u.ativo?'<span class="st off">Bloqueado</span>':u.tem_senha?'<span class="st">Senha criada</span>':'<span class="st" style="background:#FFF6DB;color:#7A5A00">Aguardando 1º acesso</span>'}</td>
+  <td class="r"><button class="ab" data-ac="${u.ativo?'bloq':'lib'}">${u.ativo?'Bloquear':'Liberar'}</button></td></tr>`).join('')+`</table></div>
+  <form id="fAdd" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:14px">
+  <input id="aNome" placeholder="Nome" required><input id="aEmail" type="email" placeholder="E-mail" required><select id="aPapel">${op('investidor')}</select><button type="submit" class="ab" style="background:var(--am);color:var(--mar);font-weight:700">Liberar acesso</button></form>
+  <div class="msg" id="aMsg" style="font-size:13px;color:#9B241B;margin-top:8px"></div>`;
+  const msg=t=>document.getElementById('aMsg').textContent=t||'';
+  box.querySelectorAll('button[data-ac]').forEach(b=>b.onclick=async()=>{const id=b.closest('tr').dataset.id;const u=lista.find(x=>x.id===id);
+    const d=await rpc('mvt_admin_salvar',{p_sessao:ls.get(SESS),p_id:id,p_nome:u.nome,p_email:u.email,p_papel:u.papel,p_ativo:b.dataset.ac==='lib'});
+    if(d.erro){msg(d.erro);return}box.remove();adminPainel()});
+  document.getElementById('fAdd').onsubmit=async e=>{e.preventDefault();msg('Salvando…');
+    const d=await rpc('mvt_admin_salvar',{p_sessao:ls.get(SESS),p_id:null,p_nome:document.getElementById('aNome').value,p_email:document.getElementById('aEmail').value,p_papel:document.getElementById('aPapel').value,p_ativo:true});
+    if(d.erro){msg(d.erro);return}box.remove();adminPainel()}}
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(b){MES=b.dataset.m;draw(window.MESES_LIST)}});
-window.addEventListener('hashchange',()=>{if(linkToken())init()});
 init();
 // ---- app instalável (PWA) ----
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
