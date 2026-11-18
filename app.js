@@ -27,7 +27,33 @@ let D=null, MES=null;
 
 // ---------- cálculos ----------
 const leit=(m,mes)=>m.leituras.find(l=>String(l.mes).slice(0,10)===mes);
-const fat=(m,mes)=>{const l=leit(m,mes);return l?num(l.faturamento):null};
+const CAT_PREMIO='Prêmios e pelúcias', CAT_COM='Aluguel ou comissão do ponto';
+// dinheiro: vale a contagem do cofre; sem contagem no mês, usa a telemetria (nunca soma os dois)
+function dinheiroContado(m,mes){const vs=D.visitas.filter(v=>v.codigo===m.codigo&&String(v.data).slice(0,7)===mes.slice(0,7)&&v.recolhido!=null);return vs.length?vs.reduce((s,v)=>s+num(v.recolhido),0):null}
+function receita(m,mes){const l=leit(m,mes),c=dinheiroContado(m,mes);if(!l)return c;return num(l.faturamento)-num(l.dinheiro)+(c!==null?c:num(l.dinheiro))}
+const fat=(m,mes)=>receita(m,mes);
+function visitasMaq(cod){return D.visitas.filter(v=>v.codigo===cod).sort((a,b)=>String(a.data).localeCompare(String(b.data)))}
+function premiosSaidos(m,mes){const l=leit(m,mes);if(l&&num(l.premios)>0)return {qtd:num(l.premios),fonte:'telemetria'};
+  const vs=visitasMaq(m.codigo);let q=0,ok=false;
+  for(let i=1;i<vs.length;i++){const p=vs[i-1],v=vs[i];if(String(v.data).slice(0,7)!==mes.slice(0,7)||v.visor==null||(p.visor==null&&p.repostos==null))continue;
+    q+=Math.max(0,num(p.visor)+num(p.repostos)-num(v.visor));ok=true}
+  return ok?{qtd:q,fonte:'contagem nas visitas'}:null}
+function estoqueMaq(m){const vs=visitasMaq(m.codigo);const u=vs[vs.length-1];if(!u||(u.visor==null&&u.repostos==null))return null;return {qtd:num(u.visor)+num(u.repostos),data:u.data}}
+function custoPremio(m){if(m.custo_premio!=null)return num(m.custo_premio);const c=D.estoque&&D.estoque.custos;return c&&m.premio&&c[m.premio]!=null?num(c[m.premio]):null}
+const semPremio=m=>!m.premio||/sem pr/i.test(m.premio);
+function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l=leit(m,mes),cont=dinheiroContado(m,mes);
+  const ps=premiosSaidos(m,mes),cp=custoPremio(m),lm=lancMes(mes,m.codigo);
+  const lancPremio=lm.filter(x=>x.tipo==='saida'&&x.categoria===CAT_PREMIO).reduce((s,x)=>s+num(x.valor),0);
+  let custoP=semPremio(m)?0:(ps&&cp!==null?ps.qtd*cp:(lancPremio||null));
+  const pagaCom=lm.filter(x=>x.tipo==='saida'&&x.categoria===CAT_COM).reduce((s,x)=>s+num(x.valor),0);
+  const devida=rec*num(m.comissao_pct)/100+num(m.comissao_fixa),com=pagaCom>0?pagaCom:devida;
+  const outras=lm.filter(x=>x.tipo==='saida'&&x.categoria!==CAT_COM&&x.categoria!==CAT_PREMIO).reduce((s,x)=>s+num(x.valor),0);
+  const ent=lm.filter(x=>x.tipo==='entrada').reduce((s,x)=>s+num(x.valor),0);
+  return {rec,eletr:l?num(l.faturamento)-num(l.dinheiro):0,dinTel:l?num(l.dinheiro):null,dinCont:cont,ps,cp,custoP,devida,pagaCom,com,outras,ent,
+    lucro:rec-(custoP||0)-com-outras+ent,semCusto:custoP===null,semComissao:!num(m.comissao_pct)&&!num(m.comissao_fixa)&&!pagaCom}}
+function lucroRede(mes){let t=0,rec=0,falta=0;D.maquinas.forEach(m=>{const x=lucro(m,mes);if(x){t+=x.lucro;rec+=x.rec;if(x.semCusto)falta++}});
+  const ger=lancMes(mes).filter(l=>!l.codigo);t+=ger.filter(l=>l.tipo==='entrada').reduce((s,l)=>s+num(l.valor),0)-ger.filter(l=>l.tipo==='saida').reduce((s,l)=>s+num(l.valor),0);
+  return {lucro:t,rec,falta}}
 function mesesComDado(){const s=new Set();D.maquinas.forEach(m=>m.leituras.forEach(l=>s.add(String(l.mes).slice(0,10))));
   D.lancamentos.forEach(l=>s.add(String(l.competencia).slice(0,10)));s.add(mesAtual());return [...s].sort()}
 const lancMes=(mes,cod)=>D.lancamentos.filter(l=>String(l.competencia).slice(0,10)===mes&&(cod===undefined||l.codigo===cod));
@@ -103,13 +129,13 @@ function topo(){
   $('#btnSair').onclick=sair;
   const t=[['inicio','Início']];if(D.pode.dinheiro)t.push(['maquinas','Máquinas']);
   if(D.pode.dinheiro)t.push(['financeiro','Financeiro']);
-  t.push(['visitas','Visitas']);if(D.pode.acessos)t.push(['acessos','Acessos']);
+  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos)t.push(['acessos','Acessos']);
   const tabs=$('#tabs');tabs.style.display='';tabs.innerHTML=t.map(([k,n])=>`<a href="#${k}" data-k="${k}">${n}</a>`).join('')}
 function rota(){if(!D)return;const h=decodeURIComponent(location.hash.slice(1))||'inicio';
   const k=h.startsWith('m/')?'maquinas':h;document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));
   window.scrollTo(0,0);
   if(h.startsWith('m/'))return telaMaquina(h.slice(2));
-  ({inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,acessos:telaAcessos}[h]||telaInicio)()}
+  ({inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,estoque:telaEstoque,acessos:telaAcessos}[h]||telaInicio)()}
 window.addEventListener('hashchange',rota);
 function seletorMes(){const ms=mesesComDado().slice(-13);
   return `<div class="meses">${ms.map(m=>`<button data-mes="${m}" class="${m===MES?'on':''}">${nomeMes(m)}${m===mesAtual()?' •':''}</button>`).join('')}</div>`}
@@ -126,7 +152,7 @@ function telaInicio(){
   let h=seletorMes()+`<div class="kpis">
    <div class="kpi"><div class="l">Faturamento ${nomeMes(MES)}</div><div class="v">${brl(c.fat)}</div><div class="s">${MES===mesAtual()?'parcial do mês':varp===null?'—':(varp>=0?'▲ ':'▼ ')+Math.abs(varp).toFixed(0)+'% vs mês anterior'}</div></div>
    <div class="kpi"><div class="l">Máquinas</div><div class="v">${D.maquinas.length}</div><div class="s">${ativas} ativas</div></div>
-   <div class="kpi r"><div class="l">Custos lançados</div><div class="v">${c.saidas?brl(c.saidas):'—'}</div><div class="s">${c.saidas||c.entradas?'resultado parcial '+brl(c.resultado):'nenhum custo lançado no mês'}</div></div>`;
+   <div class="kpi ${lucroRede(MES).lucro>=0?'g':'r'}"><div class="l">Lucro estimado</div><div class="v">${brl(lucroRede(MES).lucro)}</div><div class="s">${lucroRede(MES).falta?lucroRede(MES).falta+' máquina(s) sem custo de pelúcia':'faturamento − pelúcias − comissão − despesas'}</div></div>`;
   const res=D.resultados.filter(r=>String(r.mes).slice(0,10)===MES);
   if(D.eu.papel==='investidor')res.forEach(r=>{h+=`<div class="kpi g"><div class="l">Sua parte · ${nomeMes(MES)}</div><div class="v">${brl(r.parte_investidor)}</div><div class="s">rendimento ${String(r.rendimento_pct).replace('.',',')}% no mês</div></div>`});
   h+=`</div>`;
@@ -150,7 +176,7 @@ function telaInicio(){
 // ---------- rota do reabastecedor ----------
 function telaRota(){
   const ord=[...D.maquinas].sort((a,b)=>(a.ultima_visita||'0').localeCompare(b.ultima_visita||'0'));
-  $('#app').innerHTML=`<div class="card"><h2>Minha rota <span class="sub">${ord.length} máquina(s)</span></h2>
+  $('#app').innerHTML=meuEstoque()+`<div class="card"><h2>Minha rota <span class="sub">${ord.length} máquina(s)</span></h2>
    <p class="sub" style="margin-bottom:6px">As que estão há mais tempo sem visita aparecem primeiro.</p>
    ${ord.map(m=>{const d=diasDesde(m.ultima_visita);return `<div class="rotai"><div class="clic" data-ir="${m.codigo}"><span class="mvt">${m.codigo}</span> <span class="sub">${esc(m.tipo)} · ${esc(m.premio||'')}</span>${m.status!=='Ativa'?` <span class="st off">${esc(m.status)}</span>`:''}
    <div>${esc(m.ponto)} <span class="sub">· ${esc(m.cidade)}</span></div>
@@ -191,28 +217,38 @@ function grafico(m){const ms=mesesComDado().slice(-12);const vals=ms.map(x=>fat(
     <text x="${i*bw+bw/2}" y="${H+14}" font-size="11" text-anchor="middle" fill="#6B6596" font-family="Poppins">${nomeMes(x)}</text>
     ${sel&&vals[i]!==null?`<text x="${i*bw+bw/2}" y="${H+30}" font-size="11" font-weight="700" text-anchor="middle" fill="#211C5E" font-family="Poppins">${brl0(v)}</text>`:''}</g>`}).join('')+`</svg>`}
 document.addEventListener('click',e=>{const g=e.target.closest('[data-gmes]');if(g){MES=g.dataset.gmes;rota()}});
+function linhasLucro(x){const L=(t,v,cl,sub)=>`<tr><td>${t}${sub?`<small>${sub}</small>`:''}</td><td class="r" style="${cl||''}">${v}</td></tr>`;
+  return `<table>${L('Cartão, Pix e remoto',brl(x.eletr))}
+  ${L('Dinheiro',x.dinCont!==null?brl(x.dinCont):x.dinTel!==null?brl(x.dinTel):'—','',x.dinCont!==null?`contado no cofre · telemetria ${brl(x.dinTel||0)} · diferença ${(x.dinCont-num(x.dinTel))>=0?'+':''}${brl(x.dinCont-num(x.dinTel))}`:'telemetria (ainda sem contagem no mês)')}
+  ${L('<b>Receita</b>','<b>'+brl(x.rec)+'</b>')}
+  ${L('− Pelúcias que saíram',x.custoP===null?'<span class="st y">falta custo</span>':brl(x.custoP),'color:var(--rt)',x.ps?`${x.ps.qtd} un. (${x.ps.fonte})${x.cp!==null?' × '+brl(x.cp):''}`:'sem contagem de prêmios')}
+  ${L('− Comissão / aluguel do ponto',brl(x.com),'color:var(--rt)',x.pagaCom?`paga (devida pelo combinado: ${brl(x.devida)})`:x.devida?'devida pelo combinado (ainda não lançada como paga)':'comissão não cadastrada')}
+  ${x.outras?L('− Outras despesas da máquina',brl(x.outras),'color:var(--rt)'):''}${x.ent?L('+ Outras entradas',brl(x.ent),'color:var(--vd)'):''}
+  ${L('<b>Lucro da máquina</b>','<b>'+brl(x.lucro)+'</b>',x.lucro>=0?'color:var(--vd)':'color:var(--rt)')}</table>`}
 function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrada no seu acesso. <a href="#maquinas">Voltar</a>');return}
-  const din=D.pode.dinheiro;
+  const din=D.pode.dinheiro,est=estoqueMaq(m);
   let h=`<a class="voltar" href="#${din?'maquinas':'inicio'}">‹ Voltar</a><div class="card"><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
    <div><h1 class="tit">${esc(m.codigo)} · ${esc(m.tipo)}</h1><p class="sub">${esc(m.ponto)} · ${esc(m.cidade)}</p>
    <div class="tags">${stTag(m)}<span>Jogada ${esc(m.jogada||'—')}</span><span>Prêmio: ${esc(m.premio||'—')}</span>${din&&m.dono?`<span>${esc(m.dono)}</span>`:''}
-   <span>Última visita: ${m.ultima_visita?dataBR(m.ultima_visita):'nenhuma'}</span></div></div>
+   ${din&&(num(m.comissao_pct)||num(m.comissao_fixa))?`<span>Comissão ${num(m.comissao_pct)?String(num(m.comissao_pct)).replace('.',',')+'%':''}${num(m.comissao_pct)&&num(m.comissao_fixa)?' + ':''}${num(m.comissao_fixa)?brl(m.comissao_fixa):''}</span>`:''}
+   <span>Última visita: ${m.ultima_visita?dataBR(m.ultima_visita):'nenhuma'}</span>
+   ${!semPremio(m)?`<span>Na máquina: ${est?est.qtd+' pelúcias'+(m.capacidade?' de '+m.capacidade:'')+' (contagem '+dataBR(est.data)+')':'sem contagem'}</span>`:''}</div></div>
    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${D.pode.visitar?`<button class="btn" data-visita="${m.codigo}">Registrar visita</button>`:''}
    ${D.pode.lancar?`<button class="btn s" id="lancM">Lançar valor</button>`:''}${D.pode.editar?`<button class="btn s" id="editM">Editar</button>`:''}</div></div></div>`;
-  if(din){const c=contas(MES,m.codigo),l=leit(m,MES),md=media3(m,MES);
-    h+=seletorMes()+`<div class="kpis"><div class="kpi"><div class="l">Faturamento ${nomeMes(MES)}</div><div class="v">${c.fat||l?brl(c.fat):'—'}</div><div class="s">${MES===mesAtual()?'parcial':md?'média 3 meses: '+brl0(md):'—'}</div></div>
-     <div class="kpi"><div class="l">Prêmios saídos</div><div class="v">${l&&l.premios!=null?l.premios:'—'}</div><div class="s">${l&&l.premios?'faturamento por prêmio: '+brl(c.fat/l.premios):'telemetria'}</div></div>
-     <div class="kpi"><div class="l">Saídas lançadas</div><div class="v">${brl(c.saidas)}</div><div class="s">${c.saidasPrev?brl(c.saidasPrev)+' previstas':'no mês'}</div></div>
-     <div class="kpi ${c.saidas||c.entradas?(c.resultado>=0?'g':'r'):''}"><div class="l">Resultado</div><div class="v">${c.saidas||c.entradas?brl(c.resultado):'—'}</div><div class="s">${c.saidas||c.entradas?'faturamento + entradas − saídas':'lance os custos para ver'}</div></div></div>`;
-    h+=`<div class="card"><h2>Faturamento por mês <span class="sub">toque na barra para ver o mês</span></h2>${grafico(m)}</div>`;
+  if(din){const x=lucro(m,MES),l=leit(m,MES),md=media3(m,MES);
+    h+=seletorMes()+`<div class="kpis"><div class="kpi"><div class="l">Receita ${nomeMes(MES)}</div><div class="v">${x?brl(x.rec):'—'}</div><div class="s">${MES===mesAtual()?'parcial':md?'média 3 meses: '+brl0(md):'—'}</div></div>
+     <div class="kpi"><div class="l">Pelúcias que saíram</div><div class="v">${x&&x.ps?x.ps.qtd:semPremio(m)?'—':'?'}</div><div class="s">${x&&x.ps?x.ps.fonte:semPremio(m)?'máquina sem prêmio':'registre a contagem na visita'}</div></div>
+     <div class="kpi r"><div class="l">Comissão do ponto</div><div class="v">${x?brl(x.com):'—'}</div><div class="s">${x&&x.pagaCom?'paga':'devida pelo combinado'}</div></div>
+     <div class="kpi ${x&&x.lucro>=0?'g':'r'}"><div class="l">Lucro da máquina</div><div class="v">${x?brl(x.lucro):'—'}</div><div class="s">${x&&x.semCusto?'falta o custo das pelúcias':x&&x.rec?Math.round(x.lucro/x.rec*100)+'% da receita':''}</div></div></div>`;
+    h+=`<div class="grid2"><div class="card"><h2>Lucro · ${nomeMes(MES)} ${parcial()}</h2>${x?linhasLucro(x):'<p class="sub">Sem dados no mês.</p>'}</div>`;
+    h+=`<div class="card"><h2>Receita por mês <span class="sub">toque na barra</span></h2>${grafico(m)}`;
     if(l){const tot=PAGTO.reduce((s,[k])=>s+num(l[k]),0)||1;
-      h+=`<div class="card"><h2>Como pagaram · ${nomeMes(MES)}</h2><div class="pag">${PAGTO.map(([k,n,c])=>num(l[k])?`<i style="width:${num(l[k])/tot*100}%;background:${c}" title="${n}"></i>`:'').join('')}</div>
-      <div class="leg">${PAGTO.filter(([k])=>num(l[k])).map(([k,n,c])=>`<span style="--c:${c}">${n} ${brl(l[k])} (${Math.round(num(l[k])/tot*100)}%)</span>`).join('')}</div>
-      <p class="mini" style="margin-top:6px">Fonte: ${esc(l.fonte||'telemetria')}</p></div>`}
-    const lm=lancMes(MES,m.codigo);
-    h+=`<div class="card"><h2>Lançamentos · ${nomeMes(MES)}</h2>${tabelaLanc(lm,false)}</div>`}
+      h+=`<h2 style="margin-top:12px">Como pagaram (telemetria)</h2><div class="pag">${PAGTO.map(([k,n,c])=>num(l[k])?`<i style="width:${num(l[k])/tot*100}%;background:${c}" title="${n}"></i>`:'').join('')}</div>
+      <div class="leg">${PAGTO.filter(([k])=>num(l[k])).map(([k,n,c])=>`<span style="--c:${c}">${n} ${brl(l[k])}</span>`).join('')}</div><p class="mini" style="margin-top:6px">Fonte: ${esc(l.fonte||'telemetria')}</p>`}
+    h+=`</div></div>`;
+    h+=`<div class="card"><h2>Lançamentos · ${nomeMes(MES)}</h2>${tabelaLanc(lancMes(MES,m.codigo),false)}</div>`}
   const vs=D.visitas.filter(v=>v.codigo===m.codigo).slice(0,15);
-  h+=`<div class="card"><h2>Visitas</h2>${tabelaVisitas(vs,false)}</div>`;
+  h+=`<div class="card"><h2>Visitas e contagens</h2>${tabelaVisitas(vs,false)}</div>`;
   if(D.pode.acessos&&m.pessoas)h+=`<div class="card"><h2>Quem acompanha esta máquina</h2>${m.pessoas.length?`<div class="tags">${m.pessoas.map(p=>`<span>${esc(p.nome)} · ${PAPEIS[p.papel]||p.papel}</span>`).join('')}</div>`:'<p class="sub">Só o franqueador e os sócios. Ligue pessoas em Acessos.</p>'}</div>`;
   $('#app').innerHTML=h;
   if($('#lancM'))$('#lancM').onclick=()=>formLanc(null,m.codigo);
@@ -226,35 +262,50 @@ function tabelaLanc(ls_,comMaq){if(!ls_.length)return '<p class="sub">Nenhum lan
     <td>${esc(l.categoria)}<small>${esc(l.descricao||'')}</small></td><td class="r" style="color:${l.tipo==='saida'?'var(--rt)':'var(--vd)'}">${l.tipo==='saida'?'− ':'+ '}${brl(l.valor)}</td>
     <td class="r">${pode?`<button class="lnk" data-elanc="${l.id}">editar</button>`:''}</td></tr>`}).join('')+`</table></div>`}
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-elanc]');if(b)formLanc(D.lancamentos.find(l=>l.id===b.dataset.elanc))});
-function telaFinanceiro(){const c=contas(MES);const lm=lancMes(MES);
+function telaFinanceiro(){const c=contas(MES);const lm=lancMes(MES);const LR=lucroRede(MES);
   const cats={};lm.filter(l=>l.tipo==='saida').forEach(l=>cats[l.categoria]=(cats[l.categoria]||0)+num(l.valor));
-  const porMaq=D.maquinas.map(m=>({m,c:contas(MES,m.codigo)})).filter(x=>x.c.fat||x.c.saidas||x.c.entradas).sort((a,b)=>b.c.resultado-a.c.resultado);
-  let h=seletorMes()+`<div class="kpis"><div class="kpi"><div class="l">Faturamento máquinas</div><div class="v">${brl(c.fat)}</div><div class="s">telemetria ${nomeMes(MES)}</div></div>
-   <div class="kpi"><div class="l">Outras entradas</div><div class="v">${brl(c.entradas)}</div><div class="s">lançadas</div></div>
-   <div class="kpi r"><div class="l">Saídas</div><div class="v">${brl(c.saidas)}</div><div class="s">${brl(c.saidasPagas)} pagas · ${brl(c.saidasPrev)} a pagar</div></div>
-   <div class="kpi ${c.resultado>=0?'g':'r'}"><div class="l">Resultado</div><div class="v">${brl(c.resultado)}</div><div class="s">${c.fat&&c.saidas<c.fat*0.2?'parcial: faltam custos do mês (prêmios, ponto, taxas)':c.fat?Math.round(c.resultado/c.fat*100)+'% do faturamento':''}</div></div></div>`;
+  const xs=D.maquinas.map(m=>({m,x:lucro(m,MES)})).filter(o=>o.x);
+  const dTel=xs.filter(o=>o.x.dinCont!==null).reduce((s,o)=>s+num(o.x.dinTel),0),dCont=xs.reduce((s,o)=>s+(o.x.dinCont||0),0),nCont=xs.filter(o=>o.x.dinCont!==null).length;
+  const dTelTot=xs.reduce((s,o)=>s+num(o.x.dinTel),0),dinRec=xs.reduce((s,o)=>s+(o.x.dinCont!==null?o.x.dinCont:num(o.x.dinTel)),0);
+  const comDev=xs.reduce((s,o)=>s+o.x.devida,0),comPaga=xs.reduce((s,o)=>s+o.x.pagaCom,0),semCom=xs.filter(o=>o.x.semComissao).length;
+  let h=seletorMes()+`<div class="kpis"><div class="kpi"><div class="l">Receita das máquinas</div><div class="v">${brl(LR.rec)}</div><div class="s">cartão/Pix + dinheiro ${nomeMes(MES)}</div></div>
+   <div class="kpi"><div class="l">Recebido em dinheiro</div><div class="v">${brl(dinRec)}</div><div class="s">${nCont?nCont+' máq. pela contagem, demais pela telemetria':'pela telemetria (sem contagem no mês)'}</div></div>
+   <div class="kpi r"><div class="l">Comissões dos pontos</div><div class="v">${brl(comPaga||comDev)}</div><div class="s">${comPaga?'pagas · devidas '+brl(comDev):'devidas pelo combinado'}${semCom?' · '+semCom+' sem comissão cadastrada':''}</div></div>
+   <div class="kpi ${LR.lucro>=0?'g':'r'}"><div class="l">Lucro estimado</div><div class="v">${brl(LR.lucro)}</div><div class="s">${LR.falta?LR.falta+' máquina(s) sem custo de pelúcia':LR.rec?Math.round(LR.lucro/LR.rec*100)+'% da receita':''}</div></div></div>`;
+  h+=`<div class="grid2"><div class="card"><h2>Dinheiro: telemetria × contagem</h2>${nCont?`<table><tr><td>Telemetria (máquinas contadas)</td><td class="r">${brl(dTel)}</td></tr><tr><td>Contado no cofre</td><td class="r">${brl(dCont)}</td></tr>
+     <tr><td><b>Diferença</b></td><td class="r"><b style="color:${dCont-dTel>=0?'var(--vd)':'var(--rt)'}">${dCont-dTel>=0?'+':''}${brl(dCont-dTel)}</b></td></tr></table>
+     <p class="mini" style="margin-top:6px">Vale o contado. A telemetria do dinheiro (${brl(dTelTot)} no mês) só é usada nas máquinas ainda sem contagem — os dois nunca somam.</p>`
+     :`<p class="sub">Nenhuma contagem de dinheiro registrada em ${nomeMes(MES)}. Ao registrar a visita, informe o dinheiro contado no cofre.</p>`}</div>
+   <div class="card"><h2>Saídas lançadas por categoria</h2>${Object.keys(cats).length?`<table>${Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}<div class="bar"><i style="width:${Math.round(v/c.saidas*100)}%;background:var(--verm)"></i></div></td><td class="r">${brl(v)}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhuma saída lançada no mês.</p>'}</div></div>`;
   const res=D.resultados.filter(r=>String(r.mes).slice(0,10)===MES);
   if(res.length)h+=`<div class="card"><h2>Fechamento das sociedades · ${nomeMes(MES)}</h2><div class="wrap"><table><tr><th>Sociedade</th><th class="r">Faturamento</th><th class="r">Resultado</th><th class="r">Parte do investidor</th><th class="r cj">Rendimento</th></tr>`+
     res.map(r=>`<tr><td>${esc(r.sociedade)}<small>${esc(r.documento||'')}</small></td><td class="r">${brl(r.faturamento)}</td><td class="r">${brl(r.resultado)}</td><td class="r"><b style="color:var(--vd)">${brl(r.parte_investidor)}</b></td><td class="r cj">${String(r.rendimento_pct).replace('.',',')}%</td></tr>`).join('')+`</table></div><p class="mini" style="margin-top:6px">O fechamento completo, com os comprovantes, é enviado todo dia 10.</p></div>`;
-  h+=`<div class="grid2"><div class="card"><h2>Saídas por categoria</h2>${Object.keys(cats).length?`<table>${Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}<div class="bar"><i style="width:${Math.round(v/c.saidas*100)}%;background:var(--verm)"></i></div></td><td class="r">${brl(v)}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhuma saída lançada no mês.</p>'}</div>
-   <div class="card"><h2>Resultado por máquina</h2><div class="wrap"><table><tr><th>Máquina</th><th class="r">Fatur.</th><th class="r">Saídas</th><th class="r">Resultado</th></tr>${porMaq.map(({m,c})=>`<tr class="clic" data-cod="${m.codigo}"><td><span class="mvt">${m.codigo}</span><small>${esc(m.ponto)}</small></td><td class="r">${brl0(c.fat)}</td><td class="r">${c.saidas?brl0(c.saidas):'—'}</td><td class="r" style="color:${c.resultado>=0?'var(--vd)':'var(--rt)'}">${brl0(c.resultado)}</td></tr>`).join('')}</table></div></div></div>`;
+  h+=`<div class="card"><h2>Lucro por máquina · ${nomeMes(MES)} ${parcial()}</h2><div class="wrap"><table><tr><th>Máquina</th><th class="r">Receita</th><th class="r cj">Pelúcias</th><th class="r cj">Comissão</th><th class="r cj">Outras</th><th class="r">Lucro</th></tr>`+
+    xs.sort((a,b)=>b.x.lucro-a.x.lucro).map(({m,x})=>`<tr class="clic" data-cod="${m.codigo}"><td><span class="mvt">${m.codigo}</span><small>${esc(m.ponto)}</small></td><td class="r">${brl0(x.rec)}</td>
+    <td class="r cj">${x.custoP===null?'<span class="st y">?</span>':x.custoP?brl0(x.custoP):'—'}</td><td class="r cj">${x.com?brl0(x.com):'—'}</td><td class="r cj">${x.outras?brl0(x.outras):'—'}</td>
+    <td class="r" style="color:${x.lucro>=0?'var(--vd)':'var(--rt)'}"><b>${brl0(x.lucro)}</b></td></tr>`).join('')+`</table></div>
+    <p class="mini" style="margin-top:6px">Lucro = receita − pelúcias que saíram × custo − comissão (paga ou, se não lançada, a combinada) − outras despesas da máquina. “?” = falta o custo da pelúcia (cadastre na máquina ou registre a compra no Estoque).</p></div>`;
   h+=`<div class="card"><h2>Lançamentos · ${nomeMes(MES)}${D.pode.lancar?'<button class="btn acao" id="novoL">+ Novo lançamento</button>':''}</h2>${tabelaLanc(lm,true)}</div>`;
   const prev=D.lancamentos.filter(l=>l.status==='previsto').sort((a,b)=>String(a.data).localeCompare(String(b.data)));
   if(prev.length)h+=`<div class="card"><h2>Contas a pagar (todos os meses)</h2>${tabelaLanc(prev,true)}</div>`;
-  h+=`<p class="nota">Faturamento vem da telemetria; custos, repasses e outras entradas são lançados aqui${D.pode.lancar?' (botão “Novo lançamento” ou dentro da máquina)':''}. Os meses fechados antes de nov/26 estão nos PDFs de fechamento.</p>`;
+  h+=`<p class="nota">Cartão, Pix e remoto vêm da telemetria; o dinheiro vale a contagem do cofre. Compras de pelúcias entram no Estoque (não precisa lançar de novo aqui). Os meses fechados antes de nov/26 estão nos PDFs de fechamento.</p>`;
   $('#app').innerHTML=h;if($('#novoL'))$('#novoL').onclick=()=>formLanc(null)}
 
 // ---------- visitas ----------
 function tabelaVisitas(vs,comMaq){if(!vs.length)return '<p class="sub">Nenhuma visita registrada.</p>';
-  return `<div class="wrap"><table><tr><th>Data</th>${comMaq?'<th>Máquina</th>':''}<th class="r">Repostos</th><th class="r cj">No visor</th>${D.pode.dinheiro?'<th class="r cj">Recolhido</th>':''}<th>Obs.</th><th></th></tr>`+
+  return `<div class="wrap"><table><tr><th>Data</th>${comMaq?'<th>Máquina</th>':''}<th class="r cj">Contagem</th><th class="r">Colocou</th>${D.pode.dinheiro?'<th class="r cj">Dinheiro contado</th>':''}<th>Obs.</th><th></th></tr>`+
   vs.map(v=>`<tr><td>${dataBR(v.data)}<small>${esc(v.quem||'')}</small></td>${comMaq?`<td><a class="mvt" href="#m/${v.codigo}">${v.codigo}</a><small>${esc((maq(v.codigo)||{}).ponto||'')}</small></td>`:''}
-  <td class="r">${v.repostos??'—'}</td><td class="r cj">${v.visor??'—'}</td>${D.pode.dinheiro?`<td class="r cj">${v.recolhido!=null?brl(v.recolhido):'—'}</td>`:''}
+  <td class="r cj">${v.visor??'—'}</td><td class="r">${v.repostos??'—'}</td>${D.pode.dinheiro?`<td class="r cj">${v.recolhido!=null?brl(v.recolhido):'—'}</td>`:''}
   <td>${v.limpeza?'<span class="st">limpeza</span> ':''}${v.problema?`<span class="st off">problema</span><small>${esc(v.problema)}</small>`:''}</td>
   <td class="r">${(D.pode.editar||v.meu)?`<button class="lnk" data-dvis="${v.id}">apagar</button>`:''}</td></tr>`).join('')+`</table></div>`}
 document.addEventListener('click',async e=>{const b=e.target.closest('button[data-dvis]');if(!b)return;if(!confirm('Apagar esta visita?'))return;
   const d=await rpc('mvt_apagar_visita',{p_sessao:S(),p_id:b.dataset.dvis});if(d.erro){alert(d.erro);return}carregar(true)});
+function meuEstoque(){const p=((D.estoque||{}).pessoas||[]).filter(x=>x.pessoa_id===D.eu.id);if(!p.length&&D.eu.papel!=='reabastecedor')return '';
+  const tot=p.reduce((s,x)=>s+num(x.qtd),0);
+  return `<div class="card"><h2>Pelúcias com você <span class="sub">${tot} no total</span></h2>${p.length?`<div class="tags">${p.map(x=>`<span><b>${num(x.qtd)}</b> ${esc(x.produto)}</span>`).join('')}</div>`:'<p class="sub">Nenhuma pelúcia registrada com você.</p>'}
+   <p class="mini" style="margin-top:6px">Entregas e devoluções são registradas pela MV Toy; o que você repõe nas visitas sai daqui automaticamente.</p></div>`}
 function telaVisitas(){
-  let h='';
+  let h=D.eu.papel==='franqueado'?meuEstoque():'';
   if(D.pode.visitar)h+=`<div class="card"><h2>Registrar visita<button class="btn acao" data-visita="">+ Nova visita</button></h2><p class="sub">Escolha a máquina, informe os prêmios repostos e o que encontrou no ponto.</p></div>`;
   if(D.pode.visitar&&D.eu.papel!=='reabastecedor'){const sem=D.maquinas.filter(m=>m.status==='Ativa').sort((a,b)=>(a.ultima_visita||'0').localeCompare(b.ultima_visita||'0')).slice(0,8);
     h+=`<div class="card"><h2>Rota sugerida <span class="sub">há mais tempo sem visita</span></h2><table>${sem.map(m=>`<tr class="clic" data-cod="${m.codigo}"><td><span class="mvt">${m.codigo}</span><small>${esc(m.ponto)} · ${esc(m.cidade)}</small></td><td>${m.ultima_visita?'há '+diasDesde(m.ultima_visita)+' dia(s)':'<span class="st y">nunca</span>'}</td><td class="r"><button class="btn s" data-visita="${m.codigo}">Registrar</button></td></tr>`).join('')}</table></div>`}
@@ -268,14 +319,19 @@ const optMaq=(sel,vazio)=>(vazio?`<option value="">${vazio}</option>`:'')+D.maqu
 function formVisita(cod){
   modal(`<h3>Registrar visita</h3><form class="form" id="fv">
    <div><label>Máquina</label><select id="vMaq" required>${optMaq(cod,'Escolha a máquina')}</select></div>
-   <div class="lin"><div><label>Data</label><input id="vData" type="date" value="${hojeISO()}" max="${hojeISO()}" required></div>
-   <div><label>Prêmios repostos</label><input id="vRep" type="number" min="0" inputmode="numeric"></div></div>
-   <div class="lin"><div><label>Prêmios no visor (antes)</label><input id="vVis" type="number" min="0" inputmode="numeric"></div>
-   <div><label>Dinheiro recolhido (R$)</label><input id="vRec" type="number" min="0" step="0.01" inputmode="decimal"></div></div>
+   <div><label>Data</label><input id="vData" type="date" value="${hojeISO()}" max="${hojeISO()}" required></div>
+   <p class="mini" id="vInfo"></p>
+   <div class="lin"><div><label>Pelúcias que estavam na máquina (contagem)</label><input id="vVis" type="number" min="0" inputmode="numeric"></div>
+   <div><label>Pelúcias que você colocou</label><input id="vRep" type="number" min="0" inputmode="numeric"></div></div>
+   <div><label>Dinheiro contado no cofre (R$)</label><input id="vRec" type="number" min="0" step="0.01" inputmode="decimal" placeholder="deixe vazio se não abriu o cofre"></div>
    <label class="chk"><input type="checkbox" id="vLim"> Fiz a limpeza da máquina</label>
    <div><label>Problema encontrado (se houver)</label><textarea id="vPro" rows="2" placeholder="Ex.: garra fraca, noteiro travado, luz apagada"></textarea></div>
    <label class="chk"><input type="checkbox" id="vPar"> A máquina ficou parada / precisa de manutenção</label>
    <div class="msg" id="vMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar visita</button></div></form>`,w=>{
+   const info=()=>{const m=maq(w.querySelector('#vMaq').value);if(!m){w.querySelector('#vInfo').textContent='';return}const e=estoqueMaq(m);
+     const meu=((D.estoque||{}).pessoas||[]).find(x=>x.pessoa_id===D.eu.id&&x.produto===m.premio);
+     w.querySelector('#vInfo').textContent=semPremio(m)?'Máquina sem prêmio: só informe o dinheiro e o que encontrou.':`Prêmio: ${m.premio}. ${e?'Última contagem: '+e.qtd+' na máquina ('+dataBR(e.data)+').':'Ainda sem contagem nesta máquina.'}${meu?' Com você: '+num(meu.qtd)+'.':''}`};
+   w.querySelector('#vMaq').onchange=info;info();
    w.querySelector('#fv').onsubmit=async e=>{e.preventDefault();const g=id=>w.querySelector(id),n=id=>g(id).value===''?null:Number(g(id).value);
     g('#vMsg').textContent='Salvando…';
     const d=await rpc('mvt_salvar_visita',{p_sessao:S(),p_codigo:g('#vMaq').value,p_data:g('#vData').value,p_repostos:n('#vRep'),p_visor:n('#vVis'),
@@ -310,12 +366,55 @@ function formMaquina(m){const novo=!m;m=m||{codigo:'',tipo:'Garra',status:'Ativa
    <div class="lin"><div><label>Cidade</label><input id="mCid" value="${esc(m.cidade||'')}"></div><div><label>Prêmio</label><input id="mPre" value="${esc(m.premio||'')}" placeholder="Disney, Tradicional, sem prêmio"></div></div>
    <div><label>Dono / sociedade</label><input id="mDon" value="${esc(m.dono||'MV Toy')}" list="donosM"></div>
    <datalist id="donosM">${[...new Set(D.maquinas.map(x=>x.dono).filter(Boolean))].map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+   <div class="lin"><div><label>Comissão do ponto (%)</label><input id="mCp" type="number" min="0" max="100" step="0.01" value="${m.comissao_pct??''}" placeholder="ex.: 20"></div>
+   <div><label>Aluguel fixo do ponto (R$/mês)</label><input id="mCf" type="number" min="0" step="0.01" value="${m.comissao_fixa??''}" placeholder="ex.: 300"></div></div>
+   <div class="lin"><div><label>Custo de cada pelúcia (R$)</label><input id="mCu" type="number" min="0" step="0.01" value="${m.custo_premio??''}" placeholder="vazio = custo médio do estoque"></div>
+   <div><label>Capacidade (pelúcias)</label><input id="mCap" type="number" min="0" value="${m.capacidade??''}"></div></div>
    <div class="msg" id="mMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar</button></div></form>`,w=>{
    const g=id=>w.querySelector(id).value;
    w.querySelector('#fm').onsubmit=async e=>{e.preventDefault();w.querySelector('#mMsg').textContent='Salvando…';
     const d=await rpc('mvt_admin_maquina',{p_sessao:S(),p_novo:novo,p_codigo:g('#mCod'),p_tipo:g('#mTipo'),p_ponto:g('#mPon'),p_cidade:g('#mCid'),
-      p_jogada:g('#mJog'),p_premio:g('#mPre'),p_dono:g('#mDon'),p_status:g('#mSt')});
+      p_jogada:g('#mJog'),p_premio:g('#mPre'),p_dono:g('#mDon'),p_status:g('#mSt'),
+      p_comissao_pct:g('#mCp')===''?0:Number(g('#mCp')),p_comissao_fixa:g('#mCf')===''?0:Number(g('#mCf')),p_custo_premio:g('#mCu')===''?null:Number(g('#mCu')),p_capacidade:g('#mCap')===''?null:Number(g('#mCap'))});
     if(d.erro){w.querySelector('#mMsg').textContent=d.erro;return}w.remove();await carregar(true);if(novo)location.hash='m/'+g('#mCod').trim().toUpperCase()}})}
+
+// ---------- estoque (franqueador) ----------
+const TIPOS_MOV={compra:'Compra (entra no depósito)',entrega:'Entrega ao reabastecedor',devolucao:'Devolução ao depósito',ajuste_deposito:'Ajuste do depósito (contagem)',ajuste_pessoa:'Ajuste com a pessoa (contagem)'};
+function produtos(){return [...new Set([...D.maquinas.filter(m=>!semPremio(m)).map(m=>m.premio),...(D.estoque.deposito||[]).map(x=>x.produto)])].sort()}
+function telaEstoque(){const E=D.estoque||{deposito:[],pessoas:[],movimentos:[]};
+  const naMaq=D.maquinas.filter(m=>!semPremio(m)).map(m=>({m,e:estoqueMaq(m)}));
+  const totDep=E.deposito.reduce((s,x)=>s+num(x.qtd),0),totPes=E.pessoas.reduce((s,x)=>s+num(x.qtd),0),totMaq=naMaq.reduce((s,o)=>s+(o.e?o.e.qtd:0),0);
+  const valor=E.deposito.reduce((s,x)=>s+num(x.qtd)*num(x.custo_medio),0);
+  let h=`<div class="kpis"><div class="kpi"><div class="l">No depósito</div><div class="v">${totDep}</div><div class="s">${valor?'≈ '+brl(valor)+' a custo':'pelúcias'}</div></div>
+   <div class="kpi"><div class="l">Com reabastecedores</div><div class="v">${totPes}</div><div class="s">pelúcias</div></div>
+   <div class="kpi"><div class="l">Nas máquinas</div><div class="v">${totMaq}</div><div class="s">pela última contagem</div></div>
+   <div class="kpi"><div class="l">Total</div><div class="v">${totDep+totPes+totMaq}</div><div class="s">pelúcias na rede</div></div></div>
+   <div class="card"><h2>Movimentar<span class="acao" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-mov="compra">+ Compra</button><button class="btn s" data-mov="entrega">Entregar ao reabastecedor</button><button class="btn s" data-mov="devolucao">Devolução</button><button class="btn s" data-mov="ajuste_deposito">Ajuste</button></span></h2>
+   <p class="sub">Compra entra no depósito com o custo de cada pelúcia (vira o custo médio usado no lucro). Entrega passa do depósito para o reabastecedor; o que ele coloca nas máquinas sai dele pelas visitas.</p></div>
+   <div class="grid2"><div class="card"><h2>Depósito</h2>${E.deposito.length?`<table><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Custo médio</th></tr>${E.deposito.map(x=>`<tr><td>${esc(x.produto)}</td><td class="r" style="${num(x.qtd)<0?'color:var(--rt)':''}">${num(x.qtd)}</td><td class="r">${x.custo_medio!=null?brl(x.custo_medio):'—'}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhuma compra registrada.</p>'}</div>
+   <div class="card"><h2>Com cada pessoa</h2>${E.pessoas.length?`<table><tr><th>Pessoa</th><th>Produto</th><th class="r">Qtd</th></tr>${E.pessoas.map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.produto)}</td><td class="r" style="${num(x.qtd)<0?'color:var(--rt)':''}">${num(x.qtd)}</td></tr>`).join('')}</table><p class="mini" style="margin-top:6px">Número negativo = colocou nas máquinas mais do que recebeu: falta registrar uma entrega ou fazer um ajuste.</p>`:'<p class="sub">Ninguém está com pelúcias registradas.</p>'}</div></div>
+   <div class="card"><h2>Nas máquinas</h2><div class="wrap"><table><tr><th>Máquina</th><th>Prêmio</th><th class="r">Pelúcias</th><th class="r cj">Contagem</th></tr>${naMaq.sort((a,b)=>(a.e?a.e.qtd:-1)-(b.e?b.e.qtd:-1)).map(({m,e})=>`<tr class="clic" data-cod="${m.codigo}"><td><span class="mvt">${m.codigo}</span><small>${esc(m.ponto)}</small></td><td>${esc(m.premio)}</td>
+   <td class="r">${e?e.qtd+(m.capacidade?`<small>de ${m.capacidade}</small>`:''):'<span class="st y">sem contagem</span>'}</td><td class="r cj">${e?dataBR(e.data):'—'}</td></tr>`).join('')}</table></div></div>
+   <div class="card"><h2>Últimas movimentações</h2>${E.movimentos.length?`<div class="wrap"><table><tr><th>Data</th><th>Movimento</th><th class="r">Qtd</th><th></th></tr>${E.movimentos.map(x=>`<tr><td>${dataBR(x.data)}</td><td>${TIPOS_MOV[x.tipo]||x.tipo} · ${esc(x.produto)}<small>${[x.pessoa?esc(x.pessoa):'',x.custo_unit!=null?brl(x.custo_unit)+' cada':'',esc(x.obs||'')].filter(Boolean).join(' · ')}</small></td><td class="r">${x.qtd}</td><td class="r"><button class="lnk" data-dmov="${x.id}">apagar</button></td></tr>`).join('')}</table></div>`:'<p class="sub">Nenhuma movimentação.</p>'}</div>`;
+  $('#app').innerHTML=h}
+document.addEventListener('click',async e=>{const b=e.target.closest('button[data-mov]');if(b)formMov(b.dataset.mov);
+  const d=e.target.closest('button[data-dmov]');if(d){if(!confirm('Apagar esta movimentação?'))return;const r=await rpc('mvt_apagar_mov',{p_sessao:S(),p_id:d.dataset.dmov});if(r.erro){alert(r.erro);return}carregar(true)}});
+function formMov(tipo){const pess=D.pessoas_estoque||[];
+  modal(`<h3>Movimentar estoque</h3><form class="form" id="fe">
+   <div><label>Tipo</label><select id="eTipo">${Object.entries(TIPOS_MOV).map(([k,v])=>`<option value="${k}" ${k===tipo?'selected':''}>${v}</option>`).join('')}</select></div>
+   <div class="lin"><div><label>Produto (prêmio)</label><input id="eProd" list="prodsE" required placeholder="Disney, Tradicional…"></div><div><label id="eQtdL">Quantidade</label><input id="eQtd" type="number" step="1" required inputmode="numeric"></div></div>
+   <datalist id="prodsE">${produtos().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+   <div id="eCustoW"><label>Custo de cada pelúcia (R$)</label><input id="eCusto" type="number" min="0" step="0.01" inputmode="decimal"></div>
+   <div id="ePesW"><label>Pessoa</label><select id="ePes">${pess.map(p=>`<option value="${p.id}">${esc(p.nome)} · ${PAPEIS[p.papel]||p.papel}</option>`).join('')}</select></div>
+   <div class="lin"><div><label>Data</label><input id="eData" type="date" value="${hojeISO()}" required></div><div><label>Observação</label><input id="eObs" maxlength="120" placeholder="fornecedor, nota…"></div></div>
+   <div class="msg" id="eMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar</button></div></form>`,w=>{
+   const g=id=>w.querySelector(id);const vis=()=>{const t=g('#eTipo').value;g('#eCustoW').style.display=t==='compra'?'':'none';
+     g('#ePesW').style.display=['entrega','devolucao','ajuste_pessoa'].includes(t)?'':'none';
+     g('#eQtdL').textContent=t.startsWith('ajuste')?'Diferença (+ sobrou / − faltou)':'Quantidade'};vis();g('#eTipo').onchange=vis;
+   g('#fe').onsubmit=async e=>{e.preventDefault();g('#eMsg').textContent='Salvando…';
+    const d=await rpc('mvt_salvar_mov',{p_sessao:S(),p_tipo:g('#eTipo').value,p_produto:g('#eProd').value,p_qtd:parseInt(g('#eQtd').value,10),
+      p_custo:g('#eCusto').value===''?null:Number(g('#eCusto').value),p_pessoa:g('#ePes').value||null,p_data:g('#eData').value,p_obs:g('#eObs').value});
+    if(d.erro){g('#eMsg').textContent=d.erro;return}w.remove();carregar(true)}})}
 
 // ---------- acessos (franqueador) ----------
 let ACESSOS=[];
