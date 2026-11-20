@@ -9,7 +9,7 @@ Estudo e decisões: Drive › 05. MV Toy › 06. Operação_MV Toy › "Tecnolog
 4. Moedas lidas viram eventos em `mvt_tel_eventos` (tipo `moeda`), com o valor do pulso da máquina.
 
 ## Arquivos
-- `firmware/placa_mv/placa_mv.ino` — programa da placa (Arduino IDE, ESP32, biblioteca ArduinoJson 7).
+- `firmware/placa_mv/placa_mv.ino` — programa da placa (Arduino IDE, ESP32, bibliotecas ArduinoJson 7 e WiFiManager 2). O mesmo programa serve para todas as placas: Wi-Fi, PLACA_ID e PLACA_SEGREDO são configurados pelo celular (rede "PLACA-MV-xxxx").
 - `supabase/tel-sync/index.ts` — função do servidor.
 - `sql/2026-11-20_mvt_telemetria.sql` — tabelas e funções (placas, créditos, eventos, parear, crédito remoto, status).
 
@@ -23,7 +23,7 @@ Estudo e decisões: Drive › 05. MV Toy › 06. Operação_MV Toy › "Tecnolog
 ## Instalação (técnico)
 1. Máquina desligada. Identificar no chicote do moedeiro: 12 V, GND e SINAL (CREDIT/COIN).
 2. Ligar a Placa MV em paralelo com o moedeiro (o moedeiro continua funcionando).
-3. Ligar a máquina, esperar o LED azul piscar (online).
+3. Ligar a máquina. Placa nova: conectar o celular na rede "PLACA-MV-xxxx", escolher o Wi-Fi do ponto e colar PLACA_ID e PLACA_SEGREDO (app › Placas › Placa nova). Esperar o LED azul piscar (online). Trocar de Wi-Fi: segurar o botão BOOT 5 s ao ligar.
 4. No app MV Toy: Placas › ler o QR da placa › escolher a máquina › valor do pulso.
 5. Botão "crédito de teste (1)" → a máquina tem que mostrar 1 crédito. Só então a instalação está ok.
 

@@ -17,10 +17,15 @@
    - Alimentação: 12 V da máquina → conversor step-down 5 V → pino 5V/VIN do ESP32.
    - Os GND da máquina e do ESP32 NÃO se ligam direto: quem faz a ponte é o isolador.
 
-  Antes de gravar, preencha WIFI_NOME, WIFI_SENHA, PLACA_ID e PLACA_SEGREDO (vêm do app, aba Placas).
-  Não suba este arquivo com o segredo preenchido para o GitHub.
+  CONFIGURAÇÃO SEM REGRAVAR (v0.2):
+   - O mesmo programa serve para todas as placas. Na primeira vez (ou segurando o botão BOOT por 5 s ao ligar),
+     a placa abre a rede Wi-Fi "PLACA-MV-xxxx". Conecte o celular, abre a página de configuração:
+     escolha o Wi-Fi do ponto e cole PLACA_ID e PLACA_SEGREDO (gerados no app › Placas › Placa nova).
+   - Tudo fica guardado na memória da placa. Nenhum segredo neste arquivo.
+   Biblioteca extra: "WiFiManager" (tzapu) 2.x.
 */
 #include <WiFi.h>
+#include <WiFiManager.h>  // tzapu 2.x
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <Preferences.h>
@@ -28,12 +33,11 @@
 #include "mbedtls/md.h"
 
 // ---------- CONFIGURAÇÃO ----------
-const char* WIFI_NOME     = "PREENCHER";
-const char* WIFI_SENHA    = "PREENCHER";
-const char* PLACA_ID      = "MVP-0001";
-const char* PLACA_SEGREDO = "PREENCHER";
+char PLACA_ID[16]      = "";
+char PLACA_SEGREDO[65] = "";
 const char* URL_SYNC      = "https://koxormltidkmdwxgqbsm.supabase.co/functions/v1/tel-sync";
-const char* FIRMWARE      = "0.1";
+const char* FIRMWARE      = "0.2";
+const int PINO_BOOT = 0;       // botão BOOT do ESP32: segurar 5 s ao ligar = reconfigurar
 
 const int PINO_MOEDA   = 27;   // entrada (via PC817)
 const int PINO_CREDITO = 26;   // saída   (via PC817)
@@ -97,17 +101,30 @@ String hmacHex(const String& msg) {
   return String(hex);
 }
 
+void portalConfig(bool forcar) {
+  WiFiManager wm;
+  wm.setConfigPortalTimeout(300);          // 5 min com o portal aberto; depois segue tentando
+  WiFiManagerParameter pId("placa", "PLACA_ID (ex.: MVP-0001)", PLACA_ID, 15);
+  WiFiManagerParameter pSeg("seg", "PLACA_SEGREDO", PLACA_SEGREDO, 64);
+  wm.addParameter(&pId); wm.addParameter(&pSeg);
+  String rede = "PLACA-MV-" + String((uint32_t)(ESP.getEfuseMac() >> 32), HEX);
+  bool ok = forcar ? wm.startConfigPortal(rede.c_str()) : wm.autoConnect(rede.c_str());
+  if (strlen(pId.getValue()) > 0) { strncpy(PLACA_ID, pId.getValue(), 15); mem.putString("id", PLACA_ID); }
+  if (strlen(pSeg.getValue()) > 0) { strncpy(PLACA_SEGREDO, pSeg.getValue(), 64); mem.putString("seg", PLACA_SEGREDO); }
+  (void)ok;
+}
+
 void conectarWifi() {
   if (WiFi.status() == WL_CONNECTED) return;
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_NOME, WIFI_SENHA);
+  WiFi.begin();                             // usa o Wi-Fi guardado pelo portal
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) { delay(250); digitalWrite(PINO_LED, !digitalRead(PINO_LED)); }
 }
 
 void sincronizar() {
   conectarWifi();
-  if (WiFi.status() != WL_CONNECTED) return;
+  if (WiFi.status() != WL_CONNECTED || strlen(PLACA_ID) == 0 || strlen(PLACA_SEGREDO) == 0) return;
 
   // fecha um lote de moedas novo só quando o anterior foi aceito
   if (moedasDoLote == 0) {
@@ -171,7 +188,13 @@ void setup() {
   loteAtual = mem.getUInt("lote", 0);
   proxFeito = mem.getInt("prox", 0);
   for (int i = 0; i < MAX_FEITOS; i++) { feitos[i] = mem.getString(("f" + String(i)).c_str(), ""); feitoConfirmado[i] = false; }
-  conectarWifi();
+  mem.getString("id", "").toCharArray(PLACA_ID, sizeof(PLACA_ID));
+  mem.getString("seg", "").toCharArray(PLACA_SEGREDO, sizeof(PLACA_SEGREDO));
+  pinMode(PINO_BOOT, INPUT_PULLUP);
+  uint32_t t0 = millis(); bool segurou = true;
+  while (millis() - t0 < 5000) { if (digitalRead(PINO_BOOT) == HIGH) { segurou = false; break; } delay(50); }
+  bool semConfig = strlen(PLACA_ID) == 0 || strlen(PLACA_SEGREDO) == 0;
+  portalConfig(segurou || semConfig);
 }
 
 uint32_t ultimoSync = 0;
