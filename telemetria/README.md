@@ -2,7 +2,14 @@
 
 Estudo e decisões: Drive › 05. MV Toy › 06. Operação_MV Toy › "Tecnologia — Telemetria própria MV Toy" (Central C-0393).
 
-## Como funciona
+## Arquitetura v2 (regra do Lucas, 20/11/2026)
+A **maquininha é a central**, igual à PagPlush: o operador entra no modo operador (senha de 4 dígitos) e ali conecta o Wi-Fi, liga a placa (QR), confere as jogadas e faz o crédito de teste. A placa só encaixa no chicote do moedeiro: sem botão, sem configuração pelo celular.
+- Placa ↔ maquininha: Bluetooth (BLE) ou cabo USB [VALIDAR na Moderninha Smart e conferir como a PAGBox liga].
+- Maquininha ↔ servidor: a internet da própria maquininha (Wi-Fi do ponto ou chip 4G dela) → a placa não precisa de chip.
+- O portal Wi-Fi da v0.2 fica só como plano B (máquina sem maquininha, só Pix por QR).
+- Layout do modo operador: artefato "Maquininha MV Toy — tela de jogadas", quadro "Modo operador".
+
+## Como funciona (piloto v0.2, placa falando direto com o servidor)
 1. A **Placa MV** (ESP32 + 2 isoladores PC817) fica entre o moedeiro e a placa da máquina.
 2. A cada ~5 s ela chama `tel-sync` (Supabase Edge Function) com assinatura HMAC: manda as moedas lidas, recebe os créditos pagos.
 3. Crédito pago (teste/remoto agora; Pix/cartão depois) entra em `mvt_tel_creditos`; a placa manda os pulsos e confirma. Cada crédito só é executado uma vez (a placa guarda os últimos 20 na memória).
