@@ -1,4 +1,4 @@
-# Placa MV — montagem do piloto (para o montador)
+# Telemetria MV Toy — montagem do piloto (para o montador)
 
 Versão 1 · 20/11/2026 · placa perfurada com peças prontas. [VALIDAR] = conferir na máquina antes.
 
@@ -14,7 +14,8 @@ Versão 1 · 20/11/2026 · placa perfurada com peças prontas. [VALIDAR] = confe
 | 1 | Placa perfurada (ilhada) 5×7 cm | "placa perfurada ilhada 5x7" |
 | 1 | Barra de pinos fêmea 40 vias (para o ESP32 encaixar, sem soldar direto) | "barra pinos femea 2.54" |
 | 1 | Borne de parafuso 2,54/5,08 mm de 4 vias (entrada: 12V · GND · SINAL) | "borne kre 4 vias" |
-| 1 | Caixinha plástica patola ~8×5×3 cm | "caixa patola pequena" |
+| 1 | Caixa impressa em 3D em PETG ou ABS (`hardware/caixa/caixa_telemetria_mvtoy_base.stl` e `_tampa.stl`) — ou caixa patola ~8×5×3 cm | gráfica 3D local |
+| 4+4 | Parafusos auto-atarraxantes M2×6 (placa) e M3×8 (tampa) | "parafuso m2 auto atarraxante" |
 | — | Fio cabinho fino, espaguete termo-retrátil, abraçadeiras | |
 | 1 | Cabo USB de dados (para gravar) | |
 
@@ -29,7 +30,7 @@ Se o SINAL parado for 0 V e subir na moeda (lógica invertida), **pare e avise**
 
 ## 3. Mapa de ligação
 ```
-MÁQUINA (chicote)         PLACA MV
+MÁQUINA (chicote)         TELEMETRIA MV TOY
  12V  ──► diodo 1N5819 (faixa para o lado do step-down) ──► IN+ step-down ──(5,0 V)──► OUT+ ──► VIN do ESP32
  GND  ───────────────┬──► IN- step-down ── OUT- ──► GND do ESP32
                      ├──► BC547 emissor (E)
@@ -51,19 +52,20 @@ O moedeiro **continua ligado** no chicote como sempre: a placa fica em paralelo 
 1. Ajuste o step-down **sozinho**: ligue 12 V na entrada e gire o trimpot até a saída marcar **5,0 V** no multímetro. Só depois ligue no ESP32.
 2. Solde na placa perfurada: barra fêmea do ESP32, o BC547 (entrada), o BC337 (saída), os 4 resistores e o borne de 3–4 vias.
 3. Faça as ligações do mapa com fio fino. Confira cada ligação com o multímetro (modo continuidade, o "bip").
-4. Encaixe o ESP32 na barra fêmea, isole com termo-retrátil e feche na caixinha (furo para os fios e para ver o LED azul).
+4. Encaixe o ESP32 na barra fêmea, de preferência com o USB virado para a ponta direita da placa (abertura de USB da caixa), e isole com termo-retrátil.
+5. Caixa 3D: parafuse a placa nos 4 pinos (M2), passe os fios pela entrada da ponta esquerda, prenda com abraçadeira nas 2 âncoras e feche a tampa (4× M3). Imprimir a tampa **de cabeça para baixo** (texto na mesa). Imprima 1 caixa primeiro e confira o encaixe antes de imprimir várias.
 
 ## 5. Gravação (uma vez, no notebook)
 1. Arduino IDE → Placa "ESP32 Dev Module" → bibliotecas **ArduinoJson** (7.x) e **WiFiManager** (tzapu).
-2. **Piloto (agora):** gravar `firmware/placa_mv/placa_mv.ino` (versão Wi-Fi), porque o app da maquininha ainda depende do PagBank.
-   Na primeira vez a placa abre a rede "PLACA-MV-xxxx": conecte o celular, escolha o Wi-Fi do ponto e cole o número e a chave da placa (app › Placas › Placa nova).
-3. **Depois (com o app da maquininha pronto):** gravar `firmware/placa_mv_ble/placa_mv_ble.ino` (Bluetooth) e, no Monitor Serial (115200), digitar `CFG MVP-0001 <chave>`. Daí em diante tudo é feito pela maquininha.
+2. **Piloto (agora):** gravar `firmware/telemetria_mvtoy_wifi/telemetria_mvtoy_wifi.ino` (versão Wi-Fi), porque o app da maquininha ainda depende do PagBank.
+   Na primeira vez a placa abre a rede "TELEMETRIA-MV-xxxx": conecte o celular, escolha o Wi-Fi do ponto e cole o número e a chave da placa (app › Telemetria › Placa nova).
+3. **Depois (com o app da maquininha pronto):** gravar `firmware/telemetria_mvtoy_ble/telemetria_mvtoy_ble.ino` (Bluetooth) e, no Monitor Serial (115200), digitar `CFG TMV-0001 <chave>`. Daí em diante tudo é feito pela maquininha.
 
 ## 6. Teste na bancada (sem máquina)
 - Fonte 12 V no borne, LED do ESP32 acende.
-- Com um fio, encoste SINAL no GND rapidamente → conta 1 moeda (aparece no app › Placas em "Moedas hoje").
-- No app › Placas › Crédito → com o multímetro entre SINAL e GND, a tensão cai a 0 V por um instante.
+- Com um fio, encoste SINAL no GND rapidamente → conta 1 moeda (aparece no app › Telemetria em "Moedas hoje" em até ~30 s: a placa agrupa as moedas para economizar servidor).
+- No app › Telemetria › Crédito → com o multímetro entre SINAL e GND, a tensão cai a 0 V por um instante.
 
 ## 7. Teste na máquina
-Instale no chicote, no app › Placas › "Ligar placa à máquina" (QR da placa) e faça o **crédito de teste**: a máquina tem que mostrar 1 crédito. Coloque 1 moeda: tem que contar 1 crédito **e** aparecer no app.
+Instale no chicote, no app › Telemetria › "Ligar placa à máquina" (QR da placa) e faça o **crédito de teste**: a máquina tem que mostrar 1 crédito. Coloque 1 moeda: tem que contar 1 crédito **e** aparecer no app.
 Anote para o desenho da placa definitiva: modelo da máquina, tensão do SINAL, duração do pulso que funcionou, tipo de conector do chicote (foto).

@@ -2,7 +2,7 @@
 const URL_SB='https://koxormltidkmdwxgqbsm.supabase.co', KEY='sb_publishable_J7Ps1yZ4BPvFMof7coAAuQ_xO4I5QIe';
 const SESS='mvt_sess';
 const MESES_N=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-const PAPEIS={admin:'Franqueador',socio:'Sócio',franqueado:'Franqueado',investidor:'Investidor',reabastecedor:'Reabastecedor'};
+const PAPEIS={admin:'Franqueador',socio:'Sócio',franqueado:'Franqueado',investidor:'Investidor',reabastecedor:'Reabastecedor',cliente_telemetria:'Cliente Telemetria'};
 const CAT_SAIDA=['Prêmios e pelúcias','Aluguel ou comissão do ponto','Manutenção e peças','Frete e deslocamento','Energia','Taxas de pagamento','Telemetria e internet','Royalties','Repasse ao investidor','Impostos','Outras saídas'];
 const CAT_ENTRADA=['Venda de máquina ou peça','Aporte','Reembolso','Outras entradas'];
 const STATUS=['Ativa','Manutenção','Parada','Em estoque'];
@@ -131,12 +131,14 @@ function topo(){
   $('#btnSair').onclick=sair;
   const t=[['inicio','Início']];if(D.pode.dinheiro)t.push(['maquinas','Máquinas']);
   if(D.pode.dinheiro)t.push(['financeiro','Financeiro']);
-  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos)t.push(['placas','Placas']);if(D.pode.acessos)t.push(['acessos','Acessos']);
+  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel))t.push(['placas','Telemetria']);if(D.pode.acessos)t.push(['acessos','Acessos']);
   const tabs=$('#tabs');tabs.style.display='';tabs.innerHTML=t.map(([k,n])=>`<a href="#${k}" data-k="${k}">${n}</a>`).join('')}
 function rota(){if(!D)return;const h=decodeURIComponent(location.hash.slice(1))||'inicio';
   const k=h.startsWith('m/')?'maquinas':h;document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));
   window.scrollTo(0,0);
   if(h.startsWith('m/'))return telaMaquina(h.slice(2));
+  if(h==='placas'&&!(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel)))return telaInicio();
+  if(h==='acessos'&&!D.pode.acessos)return telaInicio();
   ({inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,estoque:telaEstoque,placas:telaPlacas,acessos:telaAcessos}[h]||telaInicio)()}
 window.addEventListener('hashchange',rota);
 function seletorMes(){const ms=mesesComDado().slice(-13);
@@ -499,38 +501,39 @@ function formAcesso(u){const novo=!u;u=u||{nome:'',email:'',papel:'investidor',a
     if(!['admin','socio'].includes(g('#aPapel').value)){const v=await rpc('mvt_admin_vincular',{p_sessao:S(),p_acesso:id,p_codigos:cods});if(v.erro){g('#aMsg').textContent=v.erro;return}}
     w.remove();await carregar(true);location.hash='acessos';telaAcessos()}})}
 
-// ---------- placas MV (telemetria própria) ----------
+// ---------- Telemetria MV Toy (placas próprias) ----------
 let PLACAS=null;
 async function buscarPlacas(){const r=await rpc('mvt_admin_placas',{p_sessao:S()});PLACAS=Array.isArray(r)?r:[];return PLACAS}
 const tempoDesde=t=>{if(!t)return 'nunca';const s=Math.floor((Date.now()-new Date(t))/1000);if(s<90)return 'agora';if(s<3600)return Math.floor(s/60)+' min';if(s<86400)return Math.floor(s/3600)+' h';return Math.floor(s/86400)+' dias'};
-const stPlaca=p=>p.online?'<span class="st">Online</span>':`<span class="st off">Offline · ${tempoDesde(p.ultimo_contato)}</span>`;
+const stPlaca=p=>(p.situacao==='suspensa'?'<span class="st y">Suspensa</span> ':'')+(p.online?'<span class="st">Online</span>':`<span class="st off">Offline · ${tempoDesde(p.ultimo_contato)}</span>`);
 async function telaPlacas(){
   $('#app').innerHTML='<div class="card"><p class="sub">Carregando placas…</p></div>';
-  const ps=await buscarPlacas();const on=ps.filter(p=>p.online).length;
+  const ps=await buscarPlacas();const on=ps.filter(p=>p.online).length;const off=ps.filter(p=>p.codigo&&!p.online).length;
   $('#app').innerHTML=`<div class="kpis"><div class="kpi g"><div class="l">Online</div><div class="v">${on}</div></div>
-   <div class="kpi r"><div class="l">Offline</div><div class="v">${ps.length-on}</div></div>
-   <div class="kpi"><div class="l">Sem máquina</div><div class="v">${ps.filter(p=>!p.codigo).length}</div><div class="s">placas no estoque</div></div>
+   <div class="kpi r"><div class="l">Offline</div><div class="v">${off}</div><div class="s">instaladas sem sinal</div></div>
+   <div class="kpi"><div class="l">Sem máquina</div><div class="v">${ps.filter(p=>!p.codigo).length}</div><div class="s">ainda não instaladas</div></div>
    <div class="kpi"><div class="l">Moedas hoje</div><div class="v">${brl(ps.reduce((s,p)=>s+num(p.moedas_hoje),0))}</div><div class="s">lidas pelas placas</div></div></div>
-   <div class="card"><h2>Placas MV<button class="btn acao" id="parearP">Ligar placa à máquina</button></h2>
-   <p class="sub" style="margin-bottom:10px">A Placa MV fica entre o moedeiro e a máquina: conta as moedas e solta o crédito pago no Pix ou no cartão. Instalou? Ligue a placa à máquina e faça o <b>crédito de teste</b>: só está pronta quando a máquina mostrar o crédito.</p>
+   <div class="card"><h2>Telemetria MV Toy<button class="btn acao" id="parearP">Ligar placa à máquina</button></h2>
+   <p class="sub" style="margin-bottom:10px">A placa da Telemetria MV Toy fica em paralelo com o moedeiro: conta as moedas e solta na máquina o crédito pago no Pix ou no cartão. Instalou? Ligue a placa à máquina e faça o <b>crédito de teste</b>: só está pronta quando a máquina mostrar o crédito.</p>
    ${ps.length?`<div class="wrap"><table><tr><th>Placa</th><th>Máquina</th><th>Situação</th><th class="r">Moedas hoje</th><th></th></tr>${ps.map(p=>{const m=p.codigo&&maq(p.codigo);return `<tr>
-    <td><b>${esc(p.id)}</b><small>pulso ${brl(p.valor_pulso)}${p.firmware?' · v'+esc(p.firmware):''}${p.rssi!=null?' · sinal '+p.rssi+' dBm':''}</small></td>
+    <td><b>${esc(p.id)}</b><small>${p.dono&&D.pode.acessos?esc(p.dono)+' · ':''}pulso ${brl(p.valor_pulso)}${p.firmware?' · v'+esc(p.firmware):''}${p.rssi!=null?' · sinal '+p.rssi+' dBm':''}</small></td>
     <td>${p.codigo?`<a href="#m/${esc(p.codigo)}"><b>${esc(p.codigo)}</b></a><small>${m?esc(m.ponto):''}</small>`:'<span class="st y">sem máquina</span>'}</td>
     <td>${stPlaca(p)}${num(p.pendentes)?`<small>${p.pendentes} crédito(s) aguardando</small>`:''}</td>
     <td class="r">${brl(p.moedas_hoje)}</td>
-    <td class="r">${p.codigo?`<button class="btn s" data-cred="${esc(p.codigo)}">Crédito</button>`:''}</td></tr>`}).join('')}</table></div>`
+    <td class="r">${p.codigo&&p.situacao!=='suspensa'?`<button class="btn s" data-cred="${esc(p.codigo)}">Crédito</button>`:''}</td></tr>`}).join('')}</table></div>`
    :'<p class="sub">Nenhuma placa cadastrada ainda. Elas aparecem aqui assim que forem gravadas e ligadas.</p>'}</div>
    <div class="card"><h2>Como instalar</h2><table>
    <tr><td><b>1</b></td><td>Máquina desligada: ache no chicote do moedeiro os fios 12 V, GND e SINAL.</td></tr>
-   <tr><td><b>2</b></td><td>Ligue a Placa MV em paralelo com o moedeiro (o moedeiro continua funcionando).</td></tr>
-   <tr><td><b>3</b></td><td>Ligue a máquina e espere o LED azul piscar (online).</td></tr>
+   <tr><td><b>2</b></td><td>Ligue a placa em paralelo com o moedeiro (o moedeiro continua funcionando) e prenda a caixa na máquina.</td></tr>
+   <tr><td><b>3</b></td><td>Ligue a máquina. A placa aparece como <b>Online</b> aqui quando falar com o servidor (pela maquininha ou pelo Wi-Fi no piloto).</td></tr>
    <tr><td><b>4</b></td><td>Aqui no app: <b>Ligar placa à máquina</b> → leia o QR da placa → escolha a máquina e o valor do pulso.</td></tr>
    <tr><td><b>5</b></td><td>Toque em <b>Crédito</b> → 1 pulso de teste. A máquina tem que mostrar 1 crédito.</td></tr></table></div>`;
   $('#parearP').onclick=()=>formParear();
-  $('#app').insertAdjacentHTML('beforeend',`<div class="card"><h2>Placa nova (gravação)</h2><p class="sub">Gera o número e a chave de uma placa nova para gravar no programa dela (<code>PLACA_ID</code> e <code>PLACA_SEGREDO</code>). A chave aparece uma vez só: copie direto para o programa, não mande por WhatsApp ou e-mail.</p><button class="btn s" id="novaP" style="margin-top:8px">Gerar placa nova</button><div id="novaPR"></div></div>`);
+  if(!D.pode.acessos)return;
+  $('#app').insertAdjacentHTML('beforeend',`<div class="card"><h2>Placa nova (gravação)</h2><p class="sub">Gera o número (TMV-0001…) e a chave de uma placa nova. Na bancada, com a placa no USB, cole a linha de gravação no Monitor Serial (115200). A chave aparece uma vez só: não mande por WhatsApp ou e-mail.</p><button class="btn s" id="novaP" style="margin-top:8px">Gerar placa nova</button><div id="novaPR"></div></div>`);
   $('#novaP').onclick=async()=>{if(!confirm('Gerar uma placa nova?'))return;const d=await rpc('mvt_admin_nova_placa',{p_sessao:S()});
     if(d.erro){$('#novaPR').innerHTML=`<p class="msg">${esc(d.erro)}</p>`;return}
-    $('#novaPR').innerHTML=`<table style="margin-top:10px"><tr><td>PLACA_ID</td><td><b>${esc(d.id)}</b></td></tr><tr><td>PLACA_SEGREDO</td><td><code style="word-break:break-all">${esc(d.segredo)}</code></td></tr></table><p class="mini">Imprima uma etiqueta com o QR do número <b>${esc(d.id)}</b> e cole na placa.</p>`}}
+    $('#novaPR').innerHTML=`<table style="margin-top:10px"><tr><td>Número</td><td><b>${esc(d.id)}</b></td></tr><tr><td>Linha de gravação</td><td><code style="word-break:break-all">${esc(d.gravar||('CFG '+d.id+' '+d.segredo))}</code></td></tr></table><p class="mini">Imprima uma etiqueta com o QR do número <b>${esc(d.id)}</b> e cole na placa.</p>`}}
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-cred]');if(b)formCredito(b.dataset.cred)});
 async function lerQR(video,cb){
   if(!('BarcodeDetector' in window))return false;
@@ -542,10 +545,10 @@ async function lerQR(video,cb){
   return parar}
 function formParear(){
   modal(`<h3>Ligar placa à máquina</h3><form class="form" id="fp">
-   <div><label>Placa (leia o QR ou digite o número)</label><div class="lin"><input id="pId" required placeholder="MVP-0001" style="text-transform:uppercase"><button type="button" class="btn s" id="pQR">Ler QR</button></div>
+   <div><label>Placa (leia o QR ou digite o número)</label><div class="lin"><input id="pId" required placeholder="TMV-0001" style="text-transform:uppercase"><button type="button" class="btn s" id="pQR">Ler QR</button></div>
    <video id="pVid" playsinline muted style="display:none;width:100%;border-radius:12px;margin-top:8px"></video></div>
    <div class="lin"><div><label>Máquina</label><select id="pMaq">${D.maquinas.map(m=>`<option value="${m.codigo}">${m.codigo} · ${esc(m.ponto)}</option>`).join('')}</select></div>
-   <div><label>Valor de 1 pulso (R$)</label><input id="pVal" type="number" step="0.01" min="0.5" value="1.00"></div></div>
+   <div><label>Valor de 1 pulso (R$)</label><input id="pVal" type="number" step="0.01" min="0.10" max="100" value="1.00"></div></div>
    <p class="mini">Valor do pulso = quanto vale 1 moeda na máquina (ex.: 1 jogada de R$ 5 com 5 pulsos → pulso de R$ 1,00).</p>
    <div class="msg" id="pMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Ligar</button></div></form>`,w=>{
    const g=id=>w.querySelector(id);let parar=null;
@@ -557,7 +560,7 @@ function formParear(){
     if(d.erro){g('#pMsg').textContent=d.erro;return}w.remove();formCredito(g('#pMaq').value,true)}})}
 function formCredito(cod,teste){
   modal(`<h3>${teste?'Placa ligada! Agora o teste':'Crédito na '+esc(cod)}</h3><form class="form" id="fc">
-   <p class="sub">${teste?'Mande 1 pulso de teste e confira se a máquina mostra 1 crédito.':'O crédito cai na máquina em até 10 segundos (se a placa estiver online).'}</p>
+   <p class="sub">${teste?'Mande 1 pulso de teste e confira se a máquina mostra 1 crédito.':'O crédito cai na máquina em até 30 segundos (se a placa estiver online).'}</p>
    <div class="lin"><div><label>Pulsos</label><input id="cQtd" type="number" min="1" max="20" value="1"></div>
    <div><label>Tipo</label><select id="cTipo"><option value="teste">Teste</option><option value="remoto" ${teste?'':'selected'}>Remoto (cortesia/cliente)</option></select></div></div>
    <div class="msg" id="cMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Fechar</button><button class="btn">Enviar crédito</button></div></form>`,w=>{

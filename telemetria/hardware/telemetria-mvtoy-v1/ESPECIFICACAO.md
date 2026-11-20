@@ -1,4 +1,4 @@
-# Placa MV v1 — modelo final (comercial e máquinas próprias)
+# Telemetria MV Toy v1 — modelo final (comercial e máquinas próprias)
 
 Versão do desenho 0.1 · 20/11/2026 · autor: CEO MV Toy (IA) · revisão de engenheiro eletrônico: PENDENTE.
 [VALIDAR] = depende das fotos e medições das máquinas (conector do chicote, tensão do sinal).
@@ -17,7 +17,7 @@ Fica em paralelo no chicote do moedeiro/noteiro. Lê as moedas (entrada) e solta
 | Conectores | Borne de parafuso 4 vias (12V · GND · SINAL · SINAL-2) + posição para conector igual ao do chicote [VALIDAR pela foto] | Instalação sem cortar fio |
 | USB-C | Gravação e teste na bancada | Sem cabo especial |
 | Interface | LED azul (online), LED verde (pulso), botão BOOT | Diagnóstico pelo técnico |
-| Etiqueta | Área branca na serigrafia para o QR com o número da placa (MVP-xxxx) | Pareamento pela maquininha |
+| Etiqueta | Área branca na serigrafia para o QR com o número da placa (TMV-xxxx) | Pareamento pela maquininha |
 | Tamanho | ~50 × 35 mm, 2 camadas, 4 furos de fixação M3 | Cabe na caixinha patola pequena |
 
 ## 3. Ligações (netlist)
@@ -33,7 +33,7 @@ Fica em paralelo no chicote do moedeiro/noteiro. Lê as moedas (entrada) e solta
 | BOOT/EN | Botão GPIO9 → GND (com R 10k pull-up); EN com RC 10k/1 µF |
 | USB | USB-C D+/D− → GPIO19/GPIO18 do ESP32-C3; CC1/CC2 com 5,1k → GND; VBUS → diodo → entrada do buck (alimenta pela USB na bancada) |
 
-Firmware: trocar os pinos para GPIO4 (entrada, interrupção na SUBIDA para pulso "para baixo"), GPIO5 (saída), GPIO6/7 (LEDs) e placa "ESP32C3 Dev Module" (USB CDC ligado). Código já pronto em `firmware/placa_mv_ble/`.
+Firmware: trocar os pinos para GPIO4 (entrada, interrupção na SUBIDA para pulso "para baixo"), GPIO5 (saída), GPIO6/7 (LEDs) e placa "ESP32C3 Dev Module" (USB CDC ligado). Código já pronto em `firmware/telemetria_mvtoy_ble/`.
 
 ## 4. Lista de peças (para a fábrica montar — catálogo LCSC/JLCPCB)
 Códigos LCSC exatos a confirmar na hora do pedido [VALIDAR estoque], preferindo peças "Basic" (sem taxa extra):

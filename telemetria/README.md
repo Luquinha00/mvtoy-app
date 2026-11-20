@@ -1,43 +1,51 @@
-# Telemetria própria MV (Placa MV) — piloto
+# Telemetria MV Toy (telemetria própria) — v0.4 · protocolo 2 · 20/11/2026
 
-Estudo e decisões: Drive › 05. MV Toy › 06. Operação_MV Toy › "Tecnologia — Telemetria própria MV Toy" (Central C-0393).
+Produto para as máquinas próprias, para a rede de franquia e para venda a operadores de fora
+(modelo PagPlush: implantação R$ 600 + R$ 60/mês por máquina). Estudo: Drive › 06. Operação_MV Toy (Central C-0393).
 
-## Arquitetura v2 (regra do Lucas, 20/11/2026)
-A **maquininha é a central**, igual à PagPlush: o operador entra no modo operador (senha de 4 dígitos) e ali conecta o Wi-Fi, liga a placa (QR), confere as jogadas e faz o crédito de teste. A placa só encaixa no chicote do moedeiro: sem botão, sem configuração pelo celular.
-- Placa ↔ maquininha: **Bluetooth (BLE)** — confirmado pelo Lucas em 20/11 (a PAGBox também usa Bluetooth). Firmware: `firmware/placa_mv_ble/` (v0.3).
-- A placa assina o que manda e só solta crédito com assinatura do servidor (campo `s` de cada crédito): a maquininha só repassa.
-- Gravação na bancada: `CFG MVP-0001 <segredo>` pela porta USB (uma vez).
-- Maquininha ↔ servidor: a internet da própria maquininha (Wi-Fi do ponto ou chip 4G dela) → a placa não precisa de chip.
-- O portal Wi-Fi da v0.2 fica só como plano B (máquina sem maquininha, só Pix por QR).
-- Layout do modo operador: artefato "Maquininha MV Toy — tela de jogadas", quadro "Modo operador".
+## Arquitetura (regra do Lucas)
+- **A maquininha é a central** (modo operador com senha de 4 dígitos: Wi-Fi, ligar placa pelo QR, jogadas, crédito de teste).
+  A placa só encaixa no chicote do moedeiro: sem botão, sem configuração pelo celular.
+- Placa ↔ maquininha: **Bluetooth (BLE)** — `firmware/telemetria_mvtoy_ble/` (v0.4).
+- Maquininha ↔ servidor: internet da própria maquininha → `tel-sync` (Supabase Edge Function, v3).
+- Versão Wi-Fi (`firmware/telemetria_mvtoy_wifi/`, v0.3): **só piloto/plano B**, a placa fala direto com o servidor.
+- Gravação na bancada (uma vez): `CFG TMV-0001 <chave>` no Monitor Serial (app › Telemetria › Placa nova gera a linha).
 
-## Como funciona (piloto v0.2, placa falando direto com o servidor)
-1. A **Placa MV** (ESP32 + 2 isoladores PC817) fica entre o moedeiro e a placa da máquina.
-2. A cada ~5 s ela chama `tel-sync` (Supabase Edge Function) com assinatura HMAC: manda as moedas lidas, recebe os créditos pagos.
-3. Crédito pago (teste/remoto agora; Pix/cartão depois) entra em `mvt_tel_creditos`; a placa manda os pulsos e confirma. Cada crédito só é executado uma vez (a placa guarda os últimos 20 na memória).
-4. Moedas lidas viram eventos em `mvt_tel_eventos` (tipo `moeda`), com o valor do pulso da máquina.
+## Segurança (protocolo 2)
+- A placa assina cada pacote: `x-sig = HMAC-SHA256(chave, ts.corpo)`; o servidor recusa assinatura errada ou relógio > 10 min.
+- O servidor assina a confirmação `a = HMAC(chave, "ok.<agora>.<lote>")[0:32]` → só ela zera as moedas enviadas
+  (ninguém por perto apaga moedas da telemetria escrevendo uma resposta falsa no Bluetooth/rede).
+- Cada crédito vem assinado com a hora do servidor: `s = HMAC(chave, "<id>.<pulsos>.<agora>")[0:32]`;
+  a placa recusa crédito com hora mais antiga que o último aceito (resposta antiga repetida não solta jogada).
+- Conexão Bluetooth sem resposta assinada em 90 s é derrubada (ninguém "prende" a placa).
+- Moedas ainda não enviadas ficam guardadas na memória da placa (queda de energia não apaga).
+
+## Economia de servidor (rede inteira)
+A placa só fala quando tem moeda (agrupa 20 s no Bluetooth / 10 s no Wi-Fi), confirmação de crédito, ou a cada `envio_s`
+(o servidor manda: Bluetooth 300 s, Wi-Fi 20 s). Antes era a cada 5 s = ~518 mil chamadas/mês por placa.
+Com Bluetooth: ~12 mil chamadas/mês por placa → 500 máquinas ≈ 6 milhões/mês (plano Pro inclui 2 milhões; excedente US$ 2/milhão).
+Crédito remoto/Pix chega na hora porque a **maquininha** chama o servidor logo após a venda (e escuta o Realtime para crédito remoto).
+
+## Regras para o app da maquininha (a fazer, PlugPag/Android)
+1. Achar a placa pelo serviço BLE `6d760001-4d56-4d56-a001-6d76706c6163`; conferir INFO (`id` = QR).
+2. A cada aviso (notify) da característica PACOTE: enviar ao `tel-sync` com `x-placa`, `x-ts`, `x-sig` e o `corpo` **sem alterar**.
+3. Escrever a resposta inteira, sem alterar, na característica RESPOSTA.
+4. Depois de uma venda (Pix/cartão): criar o crédito no servidor e já ler PACOTE e enviar (crédito na hora).
+
+## Rede e clientes externos (banco)
+`sql/2026-11-20_telemetria_rede.sql`: cada placa tem dono (franqueado ou `cliente_telemetria`), situação
+(estoque/ativa/suspensa/cancelada), implantação e mensalidade. O dono vê e controla só as dele.
+Suspensa: continua contando moedas e entregando o que o cliente final já pagou; só não aceita crédito remoto novo.
 
 ## Arquivos
-- `firmware/placa_mv/placa_mv.ino` — programa da placa (Arduino IDE, ESP32, bibliotecas ArduinoJson 7 e WiFiManager 2). O mesmo programa serve para todas as placas: Wi-Fi, PLACA_ID e PLACA_SEGREDO são configurados pelo celular (rede "PLACA-MV-xxxx").
-- `supabase/tel-sync/index.ts` — função do servidor.
-- `sql/2026-11-20_mvt_telemetria.sql` — tabelas e funções (placas, créditos, eventos, parear, crédito remoto, status).
-
-## Lista de peças do piloto (1 máquina) [VALIDAR preços]
-- ESP32 DevKit V1 (30 pinos)
-- 2× módulo optoacoplador PC817 (ou 2× PC817 + 2× resistor 1k)
-- Conversor step-down 12 V → 5 V (ex.: LM2596 ou mini MP1584)
-- Conectores/fios no padrão do moedeiro (12V · GND · SINAL), caixinha plástica, fita dupla-face
-- Multímetro (para conferir o fio de sinal antes de ligar)
-
-## Instalação (técnico)
-1. Máquina desligada. Identificar no chicote do moedeiro: 12 V, GND e SINAL (CREDIT/COIN).
-2. Ligar a Placa MV em paralelo com o moedeiro (o moedeiro continua funcionando).
-3. Ligar a máquina. Placa nova: conectar o celular na rede "PLACA-MV-xxxx", escolher o Wi-Fi do ponto e colar PLACA_ID e PLACA_SEGREDO (app › Placas › Placa nova). Esperar o LED azul piscar (online). Trocar de Wi-Fi: segurar o botão BOOT 5 s ao ligar.
-4. No app MV Toy: Placas › ler o QR da placa › escolher a máquina › valor do pulso.
-5. Botão "crédito de teste (1)" → a máquina tem que mostrar 1 crédito. Só então a instalação está ok.
+- `firmware/telemetria_mvtoy_ble/telemetria_mvtoy_ble.ino` — placa Bluetooth (rede).
+- `firmware/telemetria_mvtoy_wifi/telemetria_mvtoy_wifi.ino` — placa Wi-Fi (piloto).
+- `supabase/tel-sync/index.ts` — servidor v3 (no ar).
+- `sql/` — tabelas e funções. `simulacao/` — testes elétricos e do programa (ver LEIA.md).
+- `hardware/` — placa de teste, placa final v1 (`telemetria-mvtoy-v1/ESPECIFICACAO.md`), caixa 3D (`caixa/`).
+- `MONTAGEM.md` — guia do montador (peças, ligação, gravação, testes).
 
 ## Ainda falta
-- Tela "Placas" no app (parear por QR, crédito de teste/remoto, online/offline).
-- Pix pelo PagBank (QR dinâmico) gerando crédito automático; app da maquininha (PlugPag).
-- Placa sem Wi-Fi do ponto: módulo 4G ou internet da maquininha [VALIDAR].
-- Fixar o certificado do servidor no firmware (hoje `setInsecure` no piloto).
+- App da maquininha (PlugPag, modo operador) e confirmação do PagBank para app próprio na Moderninha Smart.
+- Pix PagBank gerando crédito automático.
+- Fotos/medições reais do chicote → ajustar caixa e placa final; homologação Anatel antes de vender a placa.

@@ -5,7 +5,7 @@ o = []
 a = o.append
 a(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" font-family="DejaVu Sans, Arial, sans-serif">')
 a('<rect width="100%" height="100%" fill="#F3F1FB"/>')
-a('<text x="40" y="62" font-size="36" font-weight="bold" fill="#372792">Placa MV — placa de teste (piloto) · como fica montada</text>')
+a('<text x="40" y="62" font-size="36" font-weight="bold" fill="#372792">Telemetria MV Toy — placa de teste (piloto) · como fica montada</text>')
 a('<text x="40" y="98" font-size="19" fill="#4A4570">Base para o montador · versão provisória (20/11/2026) — muda depois das fotos do conector e das medições da máquina</text>')
 
 # ---------- placa perfurada ----------
@@ -187,5 +187,5 @@ a('</svg>')
 
 svg = "\n".join(o)
 open("/home/claude/placa/placa_mv_teste.svg", "w").write(svg)
-cairosvg.svg2png(bytestring=svg.encode(), write_to="/home/claude/placa/placa_mv_teste.png")
+cairosvg.svg2png(bytestring=svg.encode(), write_to="placa_teste_telemetria_mvtoy.png")
 print("ok")

@@ -1,4 +1,4 @@
-* Placa MV - saida: PC817 (CTR 50/100/200%) x NPN BC337 direto. GPIO=3.3V ligado
+* Telemetria MV Toy - saida: PC817 (CTR 50/100/200%) x NPN BC337 direto. GPIO=3.3V ligado
 .model QN NPN(IS=6.7e-15 BF=200 VAF=74 IKF=0.5 RB=10 RC=0.3)
 .model DLED D(IS=1e-18 N=1.9 RS=3)
 .param VS=12 RPU=1000 CTR=0.5

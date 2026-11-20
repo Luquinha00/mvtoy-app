@@ -1,4 +1,4 @@
-* Placa MV - entrada (BC547/MMBT3904) e saida (NPN BC337) - varre tensao e pull-up da maquina
+* Telemetria MV Toy - entrada (BC547/MMBT3904) e saida (NPN BC337) - varre tensao e pull-up da maquina
 .model QN NPN(IS=6.7e-15 BF=200 VAF=74 IKF=0.07 RB=10 RC=1)
 .param VS=12 RPU=4.7k PULSO=1
 VSIG vs 0 {VS}

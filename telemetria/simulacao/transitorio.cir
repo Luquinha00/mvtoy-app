@@ -1,4 +1,4 @@
-* Placa MV - transitorio: pulso de 20 ms, cabo de 1,5 m (10 nF), ruido de 1 V no sinal, pull-up fraco 10k a 12 V
+* Telemetria MV Toy - transitorio: pulso de 20 ms, cabo de 1,5 m (10 nF), ruido de 1 V no sinal, pull-up fraco 10k a 12 V
 .model QN NPN(IS=6.7e-15 BF=200 VAF=74 IKF=0.5 RB=10 RC=0.3 CJE=8p CJC=4p TF=0.4n TR=50n)
 VSIG vs 0 12
 RPU vs sinal 10k

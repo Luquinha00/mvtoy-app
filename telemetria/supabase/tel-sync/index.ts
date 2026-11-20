@@ -1,12 +1,15 @@
-// tel-sync — conversa da placa MV com o servidor (piloto, 20/11/2026).
-// A placa gera o pacote assinado; quem leva até aqui é a maquininha (Bluetooth → internet dela) ou a própria placa (Wi-Fi, plano B).
-// Chamada a cada ~5 s. Envia: moedas lidas, créditos executados, sinal.
-// Recebe: créditos pendentes e a configuração do pulso.
-// Segurança: assinatura HMAC-SHA256 com o segredo da placa (cabeçalhos x-placa, x-ts, x-sig).
+// tel-sync v3 — conversa da Telemetria MV Toy com o servidor (protocolo 2 · 20/11/2026).
+// A placa gera o pacote assinado; quem leva até aqui é a maquininha (Bluetooth → internet dela) ou a própria placa (Wi-Fi, piloto).
+// Envia: moedas lidas (por lote), créditos executados, sinal. Recebe: créditos pendentes e a configuração.
+// Segurança: a placa assina o pedido (x-placa, x-ts, x-sig = HMAC-SHA256(segredo, ts.corpo)).
+//            O servidor assina a confirmação  a = HMAC(segredo, "ok.<agora>.<lote>")[0:32]
+//            e cada crédito                   s = HMAC(segredo, "<id>.<pulsos>.<agora>")[0:32].
+// Economia: a placa só fala quando tem moeda/confirmação ou a cada envio_s (Bluetooth 300 s; Wi-Fi piloto 20 s).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const enc = new TextEncoder();
+const ENVIO_S = { ble: 300, wifi: 20 } as const;
 
 async function hmacHex(segredo: string, msg: string) {
   const key = await crypto.subtle.importKey("raw", enc.encode(segredo), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -22,9 +25,17 @@ function igual(a: string, b: string) {
 const resp = (status: number, obj: unknown) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
 
+// lote novo? (a placa repete o mesmo lote até receber confirmação; cópia atrasada de lote velho não conta;
+//  lote muito menor = placa regravada/zerada → recomeça a contagem)
+function loteNovo(lote: number, ultimo: number | null) {
+  if (!lote) return false;
+  if (ultimo == null) return true;
+  return lote > ultimo || lote < ultimo - 50;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return resp(405, { erro: "metodo" });
-  const placaId = (req.headers.get("x-placa") || "").toUpperCase();
+  const placaId = (req.headers.get("x-placa") || "").toUpperCase().slice(0, 20);
   const ts = Number(req.headers.get("x-ts") || 0);
   const sig = (req.headers.get("x-sig") || "").toLowerCase();
   const corpo = await req.text();
@@ -34,49 +45,62 @@ Deno.serve(async (req) => {
   if (!placa) return resp(401, { erro: "placa" });
   const esperado = await hmacHex(placa.segredo, `${ts}.${corpo}`);
   if (!igual(esperado, sig)) return resp(401, { erro: "assinatura" });
-  // relógio da placa vem do servidor (campo "agora" da resposta); aceita 10 min de diferença
-  if (Math.abs(Date.now() / 1000 - ts) > 600) return resp(401, { erro: "relogio", agora: Math.floor(Date.now() / 1000) });
+  const agoraS = Math.floor(Date.now() / 1000);
+  if (Math.abs(agoraS - ts) > 600) return resp(401, { erro: "relogio", agora: agoraS });
 
-  let b: { fw?: string; rssi?: number; lote?: number; moedas?: number; feitos?: string[]; boot?: boolean };
+  let b: { p?: number; via?: string; fw?: string; rssi?: number; lote?: number; moedas?: number; feitos?: string[]; boot?: boolean };
   try { b = JSON.parse(corpo); } catch { return resp(400, { erro: "json" }); }
+  const via = b.via === "wifi" ? "wifi" : "ble";
+  const lote = Math.max(0, Math.floor(Number(b.lote || 0)));
+  const agoraIso = new Date().toISOString();
 
-  const agora = new Date().toISOString();
-  const upd: Record<string, unknown> = { ultimo_contato: agora, ultimo_rssi: b.rssi ?? null, firmware: b.fw ?? null };
+  // contato da placa (sem mexer na contagem)
+  await db.from("mvt_tel_placas").update({ ultimo_contato: agoraIso, ultimo_rssi: b.rssi ?? null, firmware: b.fw ?? null }).eq("id", placaId);
 
-  // moedas lidas (só conta um lote novo: a placa repete o mesmo lote até receber resposta)
-  const moedas = Math.max(0, Math.min(500, Number(b.moedas || 0)));
-  if (moedas > 0 && b.lote && b.lote !== placa.ultimo_lote) {
-    await db.from("mvt_tel_eventos").insert({ placa_id: placaId, codigo: placa.codigo, tipo: "moeda", pulsos: moedas, valor: moedas * Number(placa.valor_pulso) });
-    upd.ultimo_lote = b.lote;
-    upd.pulsos_lidos_total = Number(placa.pulsos_lidos_total) + moedas;
+  // moedas: atualização condicional (se dois pedidos iguais chegarem juntos, só um conta)
+  const moedas = Math.max(0, Math.min(500, Math.floor(Number(b.moedas || 0))));
+  let atual = placa;
+  for (let tent = 0; tent < 3 && moedas > 0 && loteNovo(lote, atual.ultimo_lote); tent++) {
+    let q = db.from("mvt_tel_placas")
+      .update({ ultimo_lote: lote, pulsos_lidos_total: Number(atual.pulsos_lidos_total || 0) + moedas })
+      .eq("id", placaId).eq("pulsos_lidos_total", atual.pulsos_lidos_total ?? 0);
+    q = atual.ultimo_lote == null ? q.is("ultimo_lote", null) : q.eq("ultimo_lote", atual.ultimo_lote);
+    const { data: feito } = await q.select("id");
+    if (feito && feito.length) {
+      await db.from("mvt_tel_eventos").insert({ placa_id: placaId, codigo: placa.codigo, tipo: "moeda", pulsos: moedas, valor: moedas * Number(placa.valor_pulso) });
+      break;
+    }
+    const { data: novo } = await db.from("mvt_tel_placas").select("*").eq("id", placaId).maybeSingle();
+    if (!novo) break;
+    atual = novo;
   }
   if (b.boot) await db.from("mvt_tel_eventos").insert({ placa_id: placaId, codigo: placa.codigo, tipo: "reinicio" });
-  await db.from("mvt_tel_placas").update(upd).eq("id", placaId);
 
   // créditos que a placa confirmou que executou
-  const feitos = (b.feitos || []).filter((x) => typeof x === "string").slice(0, 10);
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const feitos = (b.feitos || []).filter((x) => typeof x === "string" && UUID.test(x)).slice(0, 10);
   if (feitos.length) {
-    await db.from("mvt_tel_creditos").update({ status: "executado", executado_em: agora })
+    await db.from("mvt_tel_creditos").update({ status: "executado", executado_em: agoraIso })
       .in("id", feitos).eq("placa_id", placaId).in("status", ["pendente", "enviado"]);
   }
 
-  // créditos pendentes para esta placa (só se ela estiver ligada a uma máquina)
-  let creditos: { id: string; pulsos: number; s?: string }[] = [];
+  // créditos pendentes (só se a placa estiver ligada a uma máquina), cada um assinado com a hora do servidor
+  let creditos: { id: string; pulsos: number; s: string }[] = [];
   if (placa.codigo) {
     const { data } = await db.from("mvt_tel_creditos").select("id,pulsos")
       .eq("placa_id", placaId).in("status", ["pendente", "enviado"]).order("criado_em").limit(3);
-    // cada crédito vai assinado com o segredo da placa: a maquininha só repassa (Bluetooth) e não consegue inventar crédito
-    creditos = await Promise.all((data || []).map(async (c) => ({ ...c, s: (await hmacHex(placa.segredo, `${c.id}.${c.pulsos}`)).slice(0, 32) })));
+    creditos = await Promise.all((data || []).map(async (c) => ({ id: c.id, pulsos: c.pulsos, s: (await hmacHex(placa.segredo, `${c.id}.${c.pulsos}.${agoraS}`)).slice(0, 32) })));
     if (creditos.length) {
-      await db.from("mvt_tel_creditos").update({ status: "enviado", enviado_em: agora })
+      await db.from("mvt_tel_creditos").update({ status: "enviado", enviado_em: agoraIso })
         .in("id", creditos.map((c) => c.id)).eq("status", "pendente");
     }
   }
 
   return resp(200, {
     ok: true,
-    agora: Math.floor(Date.now() / 1000),
+    agora: agoraS,
+    a: (await hmacHex(placa.segredo, `ok.${agoraS}.${lote}`)).slice(0, 32),
     creditos,
-    cfg: { pulso_ms: placa.pulso_ms, intervalo_ms: placa.intervalo_ms },
+    cfg: { pulso_ms: placa.pulso_ms, intervalo_ms: placa.intervalo_ms, envio_s: ENVIO_S[via] },
   });
 });
