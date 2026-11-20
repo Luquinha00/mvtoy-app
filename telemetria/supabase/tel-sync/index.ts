@@ -1,5 +1,6 @@
 // tel-sync — conversa da placa MV com o servidor (piloto, 20/11/2026).
-// A placa chama a cada ~5 s. Envia: moedas lidas, créditos executados, sinal.
+// A placa gera o pacote assinado; quem leva até aqui é a maquininha (Bluetooth → internet dela) ou a própria placa (Wi-Fi, plano B).
+// Chamada a cada ~5 s. Envia: moedas lidas, créditos executados, sinal.
 // Recebe: créditos pendentes e a configuração do pulso.
 // Segurança: assinatura HMAC-SHA256 com o segredo da placa (cabeçalhos x-placa, x-ts, x-sig).
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -53,18 +54,19 @@ Deno.serve(async (req) => {
   await db.from("mvt_tel_placas").update(upd).eq("id", placaId);
 
   // créditos que a placa confirmou que executou
-  const feitos = (b.feitos || []).filter((x) => typeof x === "string").slice(0, 20);
+  const feitos = (b.feitos || []).filter((x) => typeof x === "string").slice(0, 10);
   if (feitos.length) {
     await db.from("mvt_tel_creditos").update({ status: "executado", executado_em: agora })
       .in("id", feitos).eq("placa_id", placaId).in("status", ["pendente", "enviado"]);
   }
 
   // créditos pendentes para esta placa (só se ela estiver ligada a uma máquina)
-  let creditos: { id: string; pulsos: number }[] = [];
+  let creditos: { id: string; pulsos: number; s?: string }[] = [];
   if (placa.codigo) {
     const { data } = await db.from("mvt_tel_creditos").select("id,pulsos")
-      .eq("placa_id", placaId).in("status", ["pendente", "enviado"]).order("criado_em").limit(5);
-    creditos = data || [];
+      .eq("placa_id", placaId).in("status", ["pendente", "enviado"]).order("criado_em").limit(3);
+    // cada crédito vai assinado com o segredo da placa: a maquininha só repassa (Bluetooth) e não consegue inventar crédito
+    creditos = await Promise.all((data || []).map(async (c) => ({ ...c, s: (await hmacHex(placa.segredo, `${c.id}.${c.pulsos}`)).slice(0, 32) })));
     if (creditos.length) {
       await db.from("mvt_tel_creditos").update({ status: "enviado", enviado_em: agora })
         .in("id", creditos.map((c) => c.id)).eq("status", "pendente");

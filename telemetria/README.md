@@ -4,7 +4,9 @@ Estudo e decisões: Drive › 05. MV Toy › 06. Operação_MV Toy › "Tecnolog
 
 ## Arquitetura v2 (regra do Lucas, 20/11/2026)
 A **maquininha é a central**, igual à PagPlush: o operador entra no modo operador (senha de 4 dígitos) e ali conecta o Wi-Fi, liga a placa (QR), confere as jogadas e faz o crédito de teste. A placa só encaixa no chicote do moedeiro: sem botão, sem configuração pelo celular.
-- Placa ↔ maquininha: Bluetooth (BLE) ou cabo USB [VALIDAR na Moderninha Smart e conferir como a PAGBox liga].
+- Placa ↔ maquininha: **Bluetooth (BLE)** — confirmado pelo Lucas em 20/11 (a PAGBox também usa Bluetooth). Firmware: `firmware/placa_mv_ble/` (v0.3).
+- A placa assina o que manda e só solta crédito com assinatura do servidor (campo `s` de cada crédito): a maquininha só repassa.
+- Gravação na bancada: `CFG MVP-0001 <segredo>` pela porta USB (uma vez).
 - Maquininha ↔ servidor: a internet da própria maquininha (Wi-Fi do ponto ou chip 4G dela) → a placa não precisa de chip.
 - O portal Wi-Fi da v0.2 fica só como plano B (máquina sem maquininha, só Pix por QR).
 - Layout do modo operador: artefato "Maquininha MV Toy — tela de jogadas", quadro "Modo operador".
