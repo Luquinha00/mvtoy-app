@@ -12,7 +12,7 @@ Fica em paralelo no chicote do moedeiro/noteiro. Lê as moedas (entrada) e solta
 | Cérebro | **ESP32-C3-WROOM-02** (módulo, Wi-Fi + Bluetooth 5) | Mais barato que o ESP32 clássico, tem USB nativo (grava sem chip extra), módulo já certificado pela fábrica [VALIDAR homologação Anatel do módulo] |
 | Alimentação | Entrada 9–24 V da máquina → fusível rearmável 500 mA → diodo de proteção contra inversão → TVS 24 V → regulador buck 3,3 V (ex.: família MP1584/TPS54202, 1 A) | Aguenta 12 V e 24 V, picos da máquina e ligação invertida sem queimar |
 | Entrada (moeda) | Transistor NPN (MMBT3904) com resistor de base 47 kΩ + 100 kΩ base-emissor; coletor com pull-up 10 kΩ ao 3,3 V | Liga qualquer sinal de 1,5 a 24 V sem ajuste e quase não "pesa" no fio do moedeiro. (O optoacoplador na entrada foi descartado: com sinal de 5 V e alimentação de 12 V ele ficaria aceso parado.) |
-| Saída (crédito) | Optoacoplador EL817 + resistor 330 Ω no lado do ESP32; transistor de saída entre SINAL e GND (coletor aberto) | Puxa o sinal a 0 V igual ao moedeiro, em qualquer tensão; isola o ESP32 |
+| Saída (crédito) | Transistor NPN MMBT2222A/BC817 (coletor aberto, até 500 mA) com resistor de base 1 kΩ | Puxa o sinal a < 0,1 V com qualquer tensão e pull-up (simulado). O optoacoplador foi descartado: com pull-up forte (12 V/1k) ele não chega a 0 V |
 | Sentido do pulso | Configurado no app por máquina (padrão: pulso "para baixo") | Sem jumper para o técnico errar |
 | Conectores | Borne de parafuso 4 vias (12V · GND · SINAL · SINAL-2) + posição para conector igual ao do chicote [VALIDAR pela foto] | Instalação sem cortar fio |
 | USB-C | Gravação e teste na bancada | Sem cabo especial |
@@ -28,7 +28,7 @@ Fica em paralelo no chicote do moedeiro/noteiro. Lê as moedas (entrada) e solta
 | 3V3 | U2 OUT (via indutor e capacitores do datasheet, 3,3 V) → U1 3V3, pull-ups, LEDs |
 | SINAL | J1-3 (e J1-4 em paralelo para máquinas com 2 fios de pulso) |
 | ENTRADA | SINAL → R1 47k → base Q1 (MMBT3904); R2 100k base→GND; emissor Q1 → GND; coletor Q1 → GPIO4 + R3 10k → 3V3. Sinal parado alto → GPIO4 = 0; moeda (sinal a 0 V) → GPIO4 = 1 (borda de subida) |
-| SAÍDA | GPIO5 → R4 330 → OK1.1(A); OK1.2(K) → GND; OK1.4(C) → SINAL; OK1.3(E) → GND |
+| SAÍDA | GPIO5 → R4 1k → base Q2 (MMBT2222A); emissor Q2 → GND; coletor Q2 → SINAL; R5 100k base→GND (desligado garantido no boot) |
 | LEDs | GPIO6 → R 1k → LED azul → GND ; GPIO7 → R 1k → LED verde → GND |
 | BOOT/EN | Botão GPIO9 → GND (com R 10k pull-up); EN com RC 10k/1 µF |
 | USB | USB-C D+/D− → GPIO19/GPIO18 do ESP32-C3; CC1/CC2 com 5,1k → GND; VBUS → diodo → entrada do buck (alimenta pela USB na bancada) |
@@ -41,12 +41,12 @@ Códigos LCSC exatos a confirmar na hora do pedido [VALIDAR estoque], preferindo
 |---|---|---|
 | U1 | ESP32-C3-WROOM-02 (4 MB) | 1 |
 | U2 | Regulador buck 3,3 V até 24 V de entrada (ex.: TPS54202 ou MP1584) + indutor e capacitores do datasheet | 1 |
-| OK1 | EL817 (SMD) | 1 |
-| Q1 | MMBT3904 (SOT-23) | 1 |
+| Q1 | MMBT3904 (SOT-23) — entrada | 1 |
+| Q2 | MMBT2222A (SOT-23) — saída | 1 |
 | F1 | Fusível rearmável 500 mA (1206) | 1 |
 | D1, D2 | Diodo Schottky SS34 | 2 |
 | TVS1 | SMBJ24A | 1 |
-| R | 330 Ω, 1 kΩ (×2), 5,1 kΩ (×2), 10 kΩ (×3), 47 kΩ, 100 kΩ — 0603 | 11 |
+| R | 1 kΩ (×3), 5,1 kΩ (×2), 10 kΩ (×3), 47 kΩ, 100 kΩ (×2) — 0603 | 11 |
 | C | 10 µF/35 V, 22 µF, 100 nF (×4), 1 µF — 0805/0603 | 7 |
 | LED | Azul e verde 0603 | 2 |
 | SW | Botão tátil SMD | 1 |
@@ -68,3 +68,5 @@ Códigos LCSC exatos a confirmar na hora do pedido [VALIDAR estoque], preferindo
 ## 7. Decisões de projeto (registro)
 - Entrada sem optoacoplador: o GND já é comum (o regulador liga o GND da máquina ao da placa), então isolamento total não existe de qualquer jeito; o transistor resolve 5/12/24 V sem jumper.
 - Saída só "para baixo" (coletor aberto), que é o padrão dos moedeiros e noteiros de pulso. Máquina com pulso "para cima" na saída: não suportada na v1 [VALIDAR se existe na rede].
+- Saída por transistor NPN (não optoacoplador): simulação ngspice (telemetria/simulacao/saida.cir) — PC817 com CTR 50–200% não puxa o sinal a 0 V em 12 V/1k e 24 V/1k–4,7k; NPN fica abaixo de 0,1 V em todos os casos.
+- Entrada simulada (simulacao/entrada.cir): 5/12/24 V × pull-up 1k/4,7k/10k → GPIO 0,03–0,05 V parado e 3,3 V na moeda; a carga da placa baixa o sinal parado no máximo 15% (5 V/10k → 4,24 V, acima do limite lógico de 3,5 V).

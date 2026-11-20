@@ -1,0 +1,32 @@
+* Placa MV - saida: PC817 (CTR 50/100/200%) x NPN BC337 direto. GPIO=3.3V ligado
+.model QN NPN(IS=6.7e-15 BF=200 VAF=74 IKF=0.5 RB=10 RC=0.3)
+.model DLED D(IS=1e-18 N=1.9 RS=3)
+.param VS=12 RPU=1000 CTR=0.5
+VSIG vs 0 {VS}
+RPU vs s1 {RPU}
+RPU2 vs s2 {RPU}
+VG g 0 3.3
+* --- PC817: LED + fototransistor (fonte de corrente limitada pelo CTR, saturacao via diodo) ---
+R330 g a 330
+DL a k DLED
+VSENS k 0 0
+GPH s1 e1 value={ min(CTR*i(VSENS), (v(s1)-v(e1))/0.15 ) }
+VE e1 0 0
+* --- NPN direto ---
+RB g b 1k
+Q2 s2 b 0 QN
+.control
+foreach vs 5 12 24
+  foreach rpu 1000 4700
+    foreach ctr 0.5 1 2
+      alterparam VS=$vs
+      alterparam RPU=$rpu
+      alterparam CTR=$ctr
+      reset
+      op
+      echo "VS=$vs RPU=$rpu CTR=$ctr  I_LED=$&i(VSENS)  sinal_PC817=$&v(s1)  sinal_NPN=$&v(s2)"
+    end
+  end
+end
+.endc
+.end

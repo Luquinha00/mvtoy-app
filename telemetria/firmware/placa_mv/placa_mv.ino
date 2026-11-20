@@ -12,8 +12,8 @@
    - ENTRADA: SINAL → resistor 47k → base do transistor BC547; resistor 100k entre base e GND; emissor → GND;
               coletor → GPIO 27 + resistor 10k ao 3V3.  (Parado: GPIO 27 = 0. Moeda puxa o SINAL a 0 V → GPIO 27 sobe.)
               Funciona com sinal de 5, 12 ou 24 V sem ajuste.
-   - SAÍDA:   GPIO 26 → resistor 330 → pino 1 do PC817; pino 2 → GND;
-              pino 4 (coletor) → fio SINAL; pino 3 (emissor) → GND.  (GPIO 26 em 1 → SINAL vai a 0 V = "uma moeda".)
+   - SAÍDA:   GPIO 26 → resistor 1k → base do transistor BC337; emissor → GND; coletor → fio SINAL.
+              (GPIO 26 em 1 → SINAL vai a 0 V = "uma moeda".)
    - Alimentação: 12 V da máquina → conversor step-down ajustado em 5,0 V → pino VIN do ESP32; GND comum.
    - Enquanto a placa solta crédito, ela ignora a entrada (o próprio pulso não vira "moeda").
 
@@ -39,8 +39,8 @@ const char* URL_SYNC      = "https://koxormltidkmdwxgqbsm.supabase.co/functions/
 const char* FIRMWARE      = "0.2";
 const int PINO_BOOT = 0;       // botão BOOT do ESP32: segurar 5 s ao ligar = reconfigurar
 
-const int PINO_MOEDA   = 27;   // entrada (via PC817)
-const int PINO_CREDITO = 26;   // saída   (via PC817)
+const int PINO_MOEDA   = 27;   // entrada (via transistor BC547)
+const int PINO_CREDITO = 26;   // saída   (via transistor BC337)
 const int PINO_LED     = 2;    // LED azul da placa: pisca = online
 const uint32_t SYNC_MS = 5000;
 const uint32_t DEBOUNCE_US = 15000; // ignora repiques < 15 ms
@@ -82,7 +82,7 @@ void marcarFeito(const String& id) {
 void darCredito(int pulsos) {
   emitindo = true;
   for (int i = 0; i < pulsos; i++) {
-    digitalWrite(PINO_CREDITO, HIGH);   // PC817 conduz: sinal da máquina vai ao GND
+    digitalWrite(PINO_CREDITO, HIGH);   // BC337 conduz: sinal da máquina vai ao GND
     delay(pulsoMs);
     digitalWrite(PINO_CREDITO, LOW);
     delay(intervaloMs);

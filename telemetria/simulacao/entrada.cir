@@ -1,0 +1,30 @@
+* Placa MV - entrada (BC547/MMBT3904) e saida (NPN BC337) - varre tensao e pull-up da maquina
+.model QN NPN(IS=6.7e-15 BF=200 VAF=74 IKF=0.07 RB=10 RC=1)
+.param VS=12 RPU=4.7k PULSO=1
+VSIG vs 0 {VS}
+RPU vs sinal {RPU}
+* moedeiro: chave que puxa o sinal ao GND quando PULSO=1
+SMOE sinal 0 ctl 0 CHV
+VCTL ctl 0 {PULSO}
+.model CHV SW(VT=0.5 RON=5 ROFF=1e9)
+* entrada da placa
+R47 sinal b 47k
+R100 b 0 100k
+Q1 gpio b 0 QN
+R10 v33 gpio 10k
+V33 v33 0 3.3
+.control
+foreach vs 5 12 24
+  foreach rpu 1000 4700 10000
+    foreach p 0 1
+      alterparam VS=$vs
+      alterparam RPU=$rpu
+      alterparam PULSO=$p
+      reset
+      op
+      echo "VS=$vs RPU=$rpu PULSO=$p  sinal=$&v(sinal)  gpio=$&v(gpio)"
+    end
+  end
+end
+.endc
+.end

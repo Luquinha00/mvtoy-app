@@ -12,7 +12,7 @@
       CFG MVP-0001 <segredo>      (o app › Placas › Placa nova mostra os dois)
   e ficam na memória. Nenhum segredo neste arquivo.
 
-  Ligação: telemetria/MONTAGEM.md (entrada GPIO 27 e saída GPIO 26 via PC817; 12 V → step-down 5 V → VIN).
+  Ligação: telemetria/MONTAGEM.md (entrada GPIO 27 via BC547 e saída GPIO 26 via BC337; 12 V → step-down 5 V → VIN).
   Encaixe em paralelo no chicote: se a placa falhar, a moeda continua funcionando.
 
   BLE — serviço MV (UUIDs fixos, o app da maquininha procura por eles):
