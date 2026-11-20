@@ -12,6 +12,9 @@ Compilar: baixar `ArduinoJson-v7.2.1.h` (GitHub, bblanchon/ArduinoJson) como `st
 Resultado: 18/18 (placa sem configuração, moedas com repique, assinatura, lote reenviado, créditos, repetição, assinatura falsa, queda de energia, relógio, limite de pulsos). Achou e corrigiu 1 falha: após erro de relógio a placa só refazia o pacote 5 s depois (agora refaz na hora).
 Tamanho no Bluetooth (pior caso): pacote 395 bytes, resposta 376 bytes (limite 512).
 
+### Firmware Wi-Fi v0.2 (piloto) — `firmware/sim_wifi.cpp`
+Mesmo método, contra um servidor falso com as regras da tel-sync: 9/9 (relógio errado no 1º contato, moedas com repique, resposta perdida sem contar duas vezes, crédito Pix de 3 jogadas, confirmação, crédito reenviado sem repetir, Wi-Fi caindo 1 minuto sem perder moedas).
+
 ## 3. Servidor (tel-sync, chamadas reais pelo banco) — 20/11
 Créditos assinados (assinatura confere com a calculada no banco), limite de 3 por resposta, lote repetido sem contar duas vezes (8 moedas no total, não 13), confirmação marca "executado" e libera o próximo crédito, relógio errado → 401 + hora certa, corpo adulterado → 401, placa inexistente → 401.
 
