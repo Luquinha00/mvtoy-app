@@ -131,13 +131,13 @@ function topo(){
   $('#btnSair').onclick=sair;
   const t=[['inicio','Início']];if(D.pode.dinheiro)t.push(['maquinas','Máquinas']);
   if(D.pode.dinheiro)t.push(['financeiro','Financeiro']);
-  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos)t.push(['placas','Placas']);if(D.pode.acessos)t.push(['acessos','Acessos']);
+  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(['admin','socio','franqueado'].includes(D.eu.papel))t.push(['cobrancas','Cobranças']);if(D.pode.acessos)t.push(['placas','Placas']);if(D.pode.acessos)t.push(['acessos','Acessos']);
   const tabs=$('#tabs');tabs.style.display='';tabs.innerHTML=t.map(([k,n])=>`<a href="#${k}" data-k="${k}">${n}</a>`).join('')}
 function rota(){if(!D)return;const h=decodeURIComponent(location.hash.slice(1))||'inicio';
   const k=h.startsWith('m/')?'maquinas':h;document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));
   window.scrollTo(0,0);
   if(h.startsWith('m/'))return telaMaquina(h.slice(2));
-  ({inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,estoque:telaEstoque,placas:telaPlacas,acessos:telaAcessos}[h]||telaInicio)()}
+  ({inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,estoque:telaEstoque,placas:telaPlacas,cobrancas:telaCobrancas,acessos:telaAcessos}[h]||telaInicio)()}
 window.addEventListener('hashchange',rota);
 function seletorMes(){const ms=mesesComDado().slice(-13);
   return `<div class="meses">${ms.map(m=>`<button data-mes="${m}" class="${m===MES?'on':''}">${nomeMes(m)}${m===mesAtual()?' •':''}</button>`).join('')}</div>`}
@@ -566,6 +566,61 @@ function formCredito(cod,teste){
     const d=await rpc('mvt_admin_credito',{p_sessao:S(),p_codigo:cod,p_pulsos:parseInt(g('#cQtd').value,10),p_origem:g('#cTipo').value});
     if(d.erro){g('#cMsg').textContent=d.erro;return}
     g('#cMsg').textContent='Crédito enviado. Confira na máquina.';if(location.hash==='#placas')setTimeout(telaPlacas,1500)}})}
+
+// ---------- cobranças (Asaas, CNPJ único do Grupo MV) ----------
+const MARCAS={MVT:'MV Toy',MVP:'MV Play',MLM:'Mini Loja MV',MVF:'Mundo Virtual Franchising'};
+const TIPOS_C={ROY:'Royalty',TAXA:'Taxa de franquia',FMK:'Fundo de marketing',PED:'Pedido de compra',REP:'Repasse',TEL:'Telemetria',OPR:'Operação própria',OUT:'Outros'};
+const ST_C={criando:['Criando','y'],aberta:['Em aberto','b'],paga:['Paga',''],vencida:['Vencida','off'],cancelada:['Cancelada','off'],erro:['Erro','off']};
+let COBS=[],CLIENTES=null;
+async function telaCobrancas(){
+  $('#app').innerHTML='<div class="card"><p class="sub">Carregando cobranças…</p></div>';
+  const r=await rpc('mv_cobrancas_lista',{p_sessao:S()});if(!Array.isArray(r)){vazio(esc(r.erro||'Cobranças indisponíveis.'));return}COBS=r;
+  const soma=f=>r.filter(f).reduce((s,c)=>s+num(c.valor),0);const mes=hojeISO().slice(0,7);
+  const porMarca=Object.keys(MARCAS).map(k=>[k,soma(c=>c.marca===k&&c.status==='paga'&&String(c.pago_em).slice(0,7)===mes)]);
+  const adm=D.pode.acessos;
+  $('#app').innerHTML=`<div class="kpis"><div class="kpi g"><div class="l">Recebido no mês</div><div class="v">${brl(soma(c=>c.status==='paga'&&String(c.pago_em).slice(0,7)===mes))}</div></div>
+   <div class="kpi"><div class="l">Em aberto</div><div class="v">${brl(soma(c=>c.status==='aberta'))}</div></div>
+   <div class="kpi r"><div class="l">Vencido</div><div class="v">${brl(soma(c=>c.status==='vencida'))}</div></div></div>
+   ${adm?`<div class="card"><h2>Recebido no mês por marca</h2><div class="tags">${porMarca.map(([k,v])=>`<span>${MARCAS[k]}: <b>${brl(v)}</b></span>`).join('')}</div>
+   <p class="mini" style="margin-top:6px">Franqueador (royalty, taxa, pedido, telemetria) × operação própria aparecem separados no relatório de cada cobrança.</p></div>`:''}
+   <div class="card"><h2>Cobranças${adm?'<button class="btn acao" id="novaC">+ Nova cobrança</button>':''}</h2>
+   ${r.length?`<div class="wrap"><table><tr><th>Cliente</th><th>O quê</th><th>Vence</th><th class="r">Valor</th><th>Situação</th><th></th></tr>${r.map(c=>`<tr>
+    <td><b>${esc(c.cliente)}</b><small>${MARCAS[c.marca]}</small></td>
+    <td>${TIPOS_C[c.tipo]||c.tipo}<small>${esc(c.descricao)}${c.codigo?' · '+esc(c.codigo):''}</small></td>
+    <td>${dataBR(c.vencimento)}</td><td class="r">${brl(c.valor)}</td>
+    <td><span class="st ${(ST_C[c.status]||['',''])[1]}">${(ST_C[c.status]||[c.status])[0]}</span>${c.erro?`<small>${esc(c.erro)}</small>`:''}</td>
+    <td class="r">${c.link_fatura?`<a class="btn s" href="${esc(c.link_fatura)}" target="_blank" rel="noopener">Pagar</a>`:''}${c.pix?`<button class="btn s" data-pix="${esc(c.pix)}">Pix</button>`:''}${adm&&(c.status==='criando'||c.status==='erro')?`<button class="btn s" data-reg="${c.id}">Enviar ao Asaas</button>`:''}</td></tr>`).join('')}</table></div>`
+   :'<p class="sub">Nenhuma cobrança ainda.</p>'}</div>`;
+  if($('#novaC'))$('#novaC').onclick=()=>formCobranca()}
+document.addEventListener('click',async e=>{const p=e.target.closest('button[data-pix]');if(p){try{await navigator.clipboard.writeText(p.dataset.pix);p.textContent='Copiado!'}catch(_){prompt('Pix copia e cola:',p.dataset.pix)}}
+  const g=e.target.closest('button[data-reg]');if(g){g.textContent='Enviando…';const d=await registrarAsaas(g.dataset.reg);if(d.erro)alert(d.erro);telaCobrancas()}});
+async function registrarAsaas(id){try{const r=await fetch(URL_SB+'/functions/v1/asaas?acao=registrar',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({sessao:S(),cobranca_id:id})});return await r.json()}catch(_){return {erro:'Sem conexão com o Asaas agora.'}}}
+async function formCobranca(){
+  if(!CLIENTES){const r=await rpc('mv_admin_clientes',{p_sessao:S()});CLIENTES=Array.isArray(r)?r:[]}
+  const venc=new Date(Date.now()+5*864e5).toISOString().slice(0,10);
+  modal(`<h3>Nova cobrança</h3><form class="form" id="fcb">
+   <div><label>Cliente</label><select id="cbCli">${CLIENTES.map(c=>`<option value="${c.id}">${esc(c.nome)} · ${MARCAS[c.marca]}</option>`).join('')}<option value="novo">+ Cadastrar cliente</option></select></div>
+   <div id="cbNovo" style="display:${CLIENTES.length?'none':''}"><div class="lin"><div><label>Marca</label><select id="cnMarca">${Object.entries(MARCAS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+     <div><label>CPF ou CNPJ</label><input id="cnDoc" inputmode="numeric"></div></div>
+     <div class="lin"><div><label>Nome</label><input id="cnNome"></div><div><label>E-mail</label><input id="cnEmail" type="email"></div></div>
+     <div><label>WhatsApp</label><input id="cnTel" inputmode="tel"></div></div>
+   <div class="lin"><div><label>Tipo</label><select id="cbTipo">${Object.entries(TIPOS_C).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+   <div><label>Máquina (se for o caso)</label><select id="cbMaq">${optMaq('','—')}</select></div></div>
+   <div><label>Descrição</label><input id="cbDesc" required placeholder="Ex.: Royalty de outubro/2026"></div>
+   <div class="lin"><div><label>Valor (R$)</label><input id="cbVal" type="number" step="0.01" min="5" required></div><div><label>Vencimento</label><input id="cbVenc" type="date" value="${venc}"></div>
+   <div><label>Forma</label><select id="cbForma"><option value="ESCOLHA">Pix ou boleto</option><option value="PIX">Só Pix</option><option value="BOLETO">Só boleto</option></select></div></div>
+   <div class="msg" id="cbMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Criar e enviar</button></div></form>`,w=>{
+   const g=id=>w.querySelector(id);g('#cbCli').onchange=()=>{g('#cbNovo').style.display=g('#cbCli').value==='novo'?'':'none'};
+   if(!CLIENTES.length)g('#cbCli').value='novo';
+   g('#fcb').onsubmit=async e=>{e.preventDefault();g('#cbMsg').textContent='Criando…';let cli=g('#cbCli').value;
+    if(cli==='novo'){const c=await rpc('mv_admin_cliente',{p_sessao:S(),p_marca:g('#cnMarca').value,p_nome:g('#cnNome').value,p_cpf_cnpj:g('#cnDoc').value,p_email:g('#cnEmail').value,p_telefone:g('#cnTel').value,p_acesso:null});
+      if(c.erro){g('#cbMsg').textContent=c.erro;return}cli=c.id;CLIENTES=null}
+    const tipo=g('#cbTipo').value;
+    const d=await rpc('mv_admin_cobranca',{p_sessao:S(),p_cliente:cli,p_natureza:tipo==='OPR'?'PROPRIA':'FRANQUEADOR',p_tipo:tipo,p_codigo:g('#cbMaq').value,p_descricao:g('#cbDesc').value,
+      p_valor:parseFloat(g('#cbVal').value),p_vencimento:g('#cbVenc').value,p_forma:g('#cbForma').value,p_competencia:mesAtual(),p_origem:'app'});
+    if(d.erro){g('#cbMsg').textContent=d.erro;return}
+    g('#cbMsg').textContent='Enviando ao Asaas…';const a=await registrarAsaas(d.id);
+    if(a.erro){g('#cbMsg').textContent='Cobrança salva, mas o Asaas recusou: '+a.erro;return}w.remove();telaCobrancas()}})}
 
 // ---------- início ----------
 limpaLink();carregar();
