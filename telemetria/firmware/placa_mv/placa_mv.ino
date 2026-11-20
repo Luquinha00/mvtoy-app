@@ -1,0 +1,181 @@
+/*
+  Placa MV — telemetria própria MV Toy (piloto) · v0.1 · 20/11/2026
+  Placa: ESP32 (DevKit). Arduino IDE com "esp32 by Espressif" 2.x ou 3.x.
+
+  O que faz:
+   1) Conta os pulsos do moedeiro/noteiro (dinheiro que entrou).
+   2) Recebe do servidor os créditos pagos (Pix/cartão/remoto) e manda o pulso
+      para a placa da máquina, como se fosse uma moeda.
+   3) Avisa o servidor a cada ~5 s que está online.
+
+  LIGAÇÃO (sempre com isolador óptico — o moedeiro é 12 V, o ESP32 é 3,3 V):
+   - Entrada  (PINO_MOEDA): fio de SINAL do moedeiro → resistor 1k → LED do PC817;
+                             coletor do PC817 → GPIO 27 (pull-up interno); emissor → GND do ESP32.
+   - Saída    (PINO_CREDITO): GPIO 26 → resistor 1k → LED de outro PC817;
+                             coletor/emissor desse PC817 em paralelo com o fio de SINAL e o GND da máquina
+                             (fecha o sinal para o GND = "uma moeda").
+   - Alimentação: 12 V da máquina → conversor step-down 5 V → pino 5V/VIN do ESP32.
+   - Os GND da máquina e do ESP32 NÃO se ligam direto: quem faz a ponte é o isolador.
+
+  Antes de gravar, preencha WIFI_NOME, WIFI_SENHA, PLACA_ID e PLACA_SEGREDO (vêm do app, aba Placas).
+  Não suba este arquivo com o segredo preenchido para o GitHub.
+*/
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <Preferences.h>
+#include <ArduinoJson.h>      // Biblioteca "ArduinoJson" (Benoit Blanchon) 7.x
+#include "mbedtls/md.h"
+
+// ---------- CONFIGURAÇÃO ----------
+const char* WIFI_NOME     = "PREENCHER";
+const char* WIFI_SENHA    = "PREENCHER";
+const char* PLACA_ID      = "MVP-0001";
+const char* PLACA_SEGREDO = "PREENCHER";
+const char* URL_SYNC      = "https://koxormltidkmdwxgqbsm.supabase.co/functions/v1/tel-sync";
+const char* FIRMWARE      = "0.1";
+
+const int PINO_MOEDA   = 27;   // entrada (via PC817)
+const int PINO_CREDITO = 26;   // saída   (via PC817)
+const int PINO_LED     = 2;    // LED azul da placa: pisca = online
+const uint32_t SYNC_MS = 5000;
+const uint32_t DEBOUNCE_US = 15000; // ignora repiques < 15 ms
+
+// ---------- ESTADO ----------
+volatile uint32_t moedasPendentes = 0;
+volatile uint32_t ultimoPulsoUs = 0;
+uint32_t pulsoMs = 60, intervaloMs = 80;
+uint32_t loteAtual = 0, moedasDoLote = 0;
+long deltaRelogio = 0;          // diferença entre o relógio do servidor e o millis()
+bool primeiroEnvio = true;
+Preferences mem;
+
+// créditos já executados (para não repetir se a resposta se perder)
+const int MAX_FEITOS = 20;
+String feitos[MAX_FEITOS];
+bool feitoConfirmado[MAX_FEITOS];
+int proxFeito = 0;
+
+void IRAM_ATTR aoPulsoMoeda() {
+  uint32_t agora = micros();
+  if (agora - ultimoPulsoUs > DEBOUNCE_US) { moedasPendentes++; ultimoPulsoUs = agora; }
+}
+
+bool jaFeito(const String& id) {
+  for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i] == id) return true;
+  return false;
+}
+void marcarFeito(const String& id) {
+  feitos[proxFeito] = id; feitoConfirmado[proxFeito] = false;
+  proxFeito = (proxFeito + 1) % MAX_FEITOS;
+  // guarda na memória para sobreviver a uma queda de energia
+  for (int i = 0; i < MAX_FEITOS; i++) mem.putString(("f" + String(i)).c_str(), feitos[i]);
+  mem.putInt("prox", proxFeito);
+}
+
+void darCredito(int pulsos) {
+  for (int i = 0; i < pulsos; i++) {
+    digitalWrite(PINO_CREDITO, HIGH);   // PC817 conduz: sinal da máquina vai ao GND
+    delay(pulsoMs);
+    digitalWrite(PINO_CREDITO, LOW);
+    delay(intervaloMs);
+  }
+}
+
+String hmacHex(const String& msg) {
+  byte saida[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1);
+  mbedtls_md_hmac_starts(&ctx, (const unsigned char*)PLACA_SEGREDO, strlen(PLACA_SEGREDO));
+  mbedtls_md_hmac_update(&ctx, (const unsigned char*)msg.c_str(), msg.length());
+  mbedtls_md_hmac_finish(&ctx, saida);
+  mbedtls_md_free(&ctx);
+  char hex[65];
+  for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", saida[i]);
+  hex[64] = 0;
+  return String(hex);
+}
+
+void conectarWifi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_NOME, WIFI_SENHA);
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) { delay(250); digitalWrite(PINO_LED, !digitalRead(PINO_LED)); }
+}
+
+void sincronizar() {
+  conectarWifi();
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  // fecha um lote de moedas novo só quando o anterior foi aceito
+  if (moedasDoLote == 0) {
+    noInterrupts(); moedasDoLote = moedasPendentes; moedasPendentes = 0; interrupts();
+    if (moedasDoLote > 0) { loteAtual++; mem.putUInt("lote", loteAtual); }
+  }
+
+  JsonDocument env;
+  env["fw"] = FIRMWARE;
+  env["rssi"] = WiFi.RSSI();
+  env["lote"] = loteAtual;
+  env["moedas"] = moedasDoLote;
+  if (primeiroEnvio) env["boot"] = true;
+  JsonArray arr = env["feitos"].to<JsonArray>();
+  for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i].length() && !feitoConfirmado[i]) arr.add(feitos[i]);
+  String corpo; serializeJson(env, corpo);
+
+  long ts = (long)(millis() / 1000) + deltaRelogio;
+  WiFiClientSecure cli; cli.setInsecure();   // piloto. Produção: fixar o certificado (setCACert)
+  HTTPClient http;
+  http.begin(cli, URL_SYNC);
+  http.setTimeout(8000);
+  http.addHeader("content-type", "application/json");
+  http.addHeader("x-placa", PLACA_ID);
+  http.addHeader("x-ts", String(ts));
+  http.addHeader("x-sig", hmacHex(String(ts) + "." + corpo));
+  int code = http.POST(corpo);
+  String resp = http.getString();
+  http.end();
+
+  JsonDocument r;
+  if (deserializeJson(r, resp)) return;
+  if (r["agora"].is<long>()) deltaRelogio = r["agora"].as<long>() - (long)(millis() / 1000);
+  if (code != 200) return;   // relógio acertado acima; tenta de novo no próximo ciclo
+
+  // servidor aceitou: lote de moedas e créditos informados estão confirmados
+  moedasDoLote = 0;
+  primeiroEnvio = false;
+  for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i].length()) feitoConfirmado[i] = true;
+  if (r["cfg"]["pulso_ms"].is<int>()) pulsoMs = constrain(r["cfg"]["pulso_ms"].as<int>(), 20, 300);
+  if (r["cfg"]["intervalo_ms"].is<int>()) intervaloMs = constrain(r["cfg"]["intervalo_ms"].as<int>(), 20, 500);
+
+  for (JsonObject c : r["creditos"].as<JsonArray>()) {
+    String id = c["id"].as<String>();
+    int pulsos = constrain(c["pulsos"].as<int>(), 0, 50);
+    if (id.length() == 0 || pulsos == 0) continue;
+    if (!jaFeito(id)) { darCredito(pulsos); marcarFeito(id); }
+    else {   // já executado: só reenvia a confirmação
+      for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i] == id) feitoConfirmado[i] = false;
+    }
+  }
+  digitalWrite(PINO_LED, HIGH); delay(30); digitalWrite(PINO_LED, LOW);
+}
+
+void setup() {
+  pinMode(PINO_CREDITO, OUTPUT); digitalWrite(PINO_CREDITO, LOW);
+  pinMode(PINO_LED, OUTPUT);
+  pinMode(PINO_MOEDA, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PINO_MOEDA), aoPulsoMoeda, FALLING);
+  mem.begin("placamv", false);
+  loteAtual = mem.getUInt("lote", 0);
+  proxFeito = mem.getInt("prox", 0);
+  for (int i = 0; i < MAX_FEITOS; i++) { feitos[i] = mem.getString(("f" + String(i)).c_str(), ""); feitoConfirmado[i] = false; }
+  conectarWifi();
+}
+
+uint32_t ultimoSync = 0;
+void loop() {
+  if (millis() - ultimoSync >= SYNC_MS) { ultimoSync = millis(); sincronizar(); }
+  delay(10);
+}
