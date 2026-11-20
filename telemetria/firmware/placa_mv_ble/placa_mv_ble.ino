@@ -102,7 +102,7 @@ void montarPacote() {
 void tratarResposta(const String& txt) {
   JsonDocument r; if (deserializeJson(r, txt)) return;
   if (r["agora"].is<long>()) deltaRelogio = r["agora"].as<long>() - (long)(millis() / 1000);
-  if (!r["ok"].as<bool>()) return;                       // erro (ex.: relógio): acerta e tenta no próximo pacote
+  if (!r["ok"].as<bool>()) { montarPacote(); return; }  // erro (ex.: relógio): já refaz o pacote com o relógio certo
   moedasDoLote = 0; primeiroEnvio = false;
   for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i].length()) feitoConfirmado[i] = true;
   if (r["cfg"]["pulso_ms"].is<int>()) pulsoMs = constrain(r["cfg"]["pulso_ms"].as<int>(), 20, 300);

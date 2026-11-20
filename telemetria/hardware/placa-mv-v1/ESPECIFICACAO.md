@@ -26,7 +26,7 @@ Fica em paralelo no chicote do moedeiro/noteiro. Lê as moedas (entrada) e solta
 | VIN | J1-1 (12V) → F1 → D1 (anodo→catodo) → VIN; TVS1 entre VIN e GND; C entrada 10 µF/35 V; U2 (buck) IN |
 | GND | J1-2, U2 GND, U1 GND, emissores, C saídas |
 | 3V3 | U2 OUT (via indutor e capacitores do datasheet, 3,3 V) → U1 3V3, pull-ups, LEDs |
-| SINAL | J1-3 (e J1-4 em paralelo para máquinas com 2 fios de pulso) |
+| SINAL | J1-3 (e J1-4 em paralelo para máquinas com 2 fios de pulso); TVS2 (SMAJ24A) entre SINAL e GND contra picos |
 | ENTRADA | SINAL → R1 47k → base Q1 (MMBT3904); R2 100k base→GND; emissor Q1 → GND; coletor Q1 → GPIO4 + R3 10k → 3V3. Sinal parado alto → GPIO4 = 0; moeda (sinal a 0 V) → GPIO4 = 1 (borda de subida) |
 | SAÍDA | GPIO5 → R4 1k → base Q2 (MMBT2222A); emissor Q2 → GND; coletor Q2 → SINAL; R5 100k base→GND (desligado garantido no boot) |
 | LEDs | GPIO6 → R 1k → LED azul → GND ; GPIO7 → R 1k → LED verde → GND |
@@ -45,7 +45,8 @@ Códigos LCSC exatos a confirmar na hora do pedido [VALIDAR estoque], preferindo
 | Q2 | MMBT2222A (SOT-23) — saída | 1 |
 | F1 | Fusível rearmável 500 mA (1206) | 1 |
 | D1, D2 | Diodo Schottky SS34 | 2 |
-| TVS1 | SMBJ24A | 1 |
+| TVS1 | SMBJ24A (entrada de energia) | 1 |
+| TVS2 | SMAJ24A (fio de sinal) | 1 |
 | R | 1 kΩ (×3), 5,1 kΩ (×2), 10 kΩ (×3), 47 kΩ, 100 kΩ (×2) — 0603 | 11 |
 | C | 10 µF/35 V, 22 µF, 100 nF (×4), 1 µF — 0805/0603 | 7 |
 | LED | Azul e verde 0603 | 2 |
@@ -70,3 +71,4 @@ Códigos LCSC exatos a confirmar na hora do pedido [VALIDAR estoque], preferindo
 - Saída só "para baixo" (coletor aberto), que é o padrão dos moedeiros e noteiros de pulso. Máquina com pulso "para cima" na saída: não suportada na v1 [VALIDAR se existe na rede].
 - Saída por transistor NPN (não optoacoplador): simulação ngspice (telemetria/simulacao/saida.cir) — PC817 com CTR 50–200% não puxa o sinal a 0 V em 12 V/1k e 24 V/1k–4,7k; NPN fica abaixo de 0,1 V em todos os casos.
 - Entrada simulada (simulacao/entrada.cir): 5/12/24 V × pull-up 1k/4,7k/10k → GPIO 0,03–0,05 V parado e 3,3 V na moeda; a carga da placa baixa o sinal parado no máximo 15% (5 V/10k → 4,24 V, acima do limite lógico de 3,5 V).
+- Simulações (telemetria/simulacao/LEIA.md): elétrica 5/12/24 V, transitório com cabo e ruído, firmware 18/18 e servidor — todas aprovadas após as correções.

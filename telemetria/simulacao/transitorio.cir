@@ -1,0 +1,37 @@
+* Placa MV - transitorio: pulso de 20 ms, cabo de 1,5 m (10 nF), ruido de 1 V no sinal, pull-up fraco 10k a 12 V
+.model QN NPN(IS=6.7e-15 BF=200 VAF=74 IKF=0.5 RB=10 RC=0.3 CJE=8p CJC=4p TF=0.4n TR=50n)
+VSIG vs 0 12
+RPU vs sinal 10k
+CCABO sinal 0 10n
+* ruido de 1 V a 1 kHz somado por capacitor (interferencia)
+VRUIDO rn 0 SIN(0 1 1k)
+CRUIDO rn sinal 1n
+* moedeiro: chave puxa o sinal a 0 V de 50 ms a 70 ms (pulso de 20 ms)
+VCTL ctl 0 PULSE(0 1 50m 1u 1u 20m 200m)
+SMOE sinal 0 ctl 0 CHV
+.model CHV SW(VT=0.5 RON=5 ROFF=1e9)
+* entrada
+R47 sinal b 47k
+R100 b 0 100k
+Q1 gpio b 0 QN
+R10 v33 gpio 10k
+V33 v33 0 3.3
+* saida (placa soltando credito de 120 ms a 180 ms) em outra maquina igual
+VS2 vs2 0 12
+RPU2 vs2 s2 10k
+CCABO2 s2 0 10n
+VG g 0 PULSE(0 3.3 120m 1u 1u 60m 200m)
+RB g b2 1k
+RBE b2 0 100k
+Q2 s2 b2 0 QN
+.tran 10u 200m
+.control
+run
+meas tran gpio_parado MAX v(gpio) from=0 to=45m
+meas tran gpio_pulso MIN v(gpio) from=55m to=65m
+meas tran sobe TRIG v(gpio) VAL=1.65 RISE=1 TARG v(gpio) VAL=1.65 FALL=1
+meas tran sinal2_min MIN v(s2) from=125m to=175m
+meas tran sinal2_parado MIN v(s2) from=0 to=115m
+meas tran desce_s2 TRIG v(g) VAL=1.65 RISE=1 TARG v(s2) VAL=1.0 FALL=1
+.endc
+.end

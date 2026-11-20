@@ -170,7 +170,7 @@ txt = ["1. A máquina alimenta tudo: 12 V → step-down → 5 V.",
        "• Resistores: 47k amarelo-violeta-laranja · 100k marrom-",
        "   preto-amarelo · 10k marrom-preto-laranja · 1k marrom-",
        "   preto-vermelho.",
-       "• Testado em simulação: 5, 12 e 24 V."]
+       "• Simulado e aprovado: 5, 12 e 24 V."]
 for i, t in enumerate(txt):
     label(LX + 30, 515 + i * 25, t, 16, "#211C5E", "bold" if t == "Atenção:" else "normal", "start")
 
@@ -179,7 +179,7 @@ a(f'<rect x="60" y="930" width="1700" height="190" rx="16" fill="#4A37B5"/>')
 label(90, 975, "Lista de peças da placa de teste (Mercado Livre)", 22, "#FFC61C", "bold", "start")
 pecas = ["ESP32 DevKit WROOM-32 (30 pinos) — 1 + 1 reserva", "Step-down LM2596 — 1", "Transistor BC547 (entrada) — 1 + 1 reserva",
          "Transistor BC337 (saída) — 1 + 1 reserva", "Resistores 47k, 100k, 10k, 1k (kit sortido)", "Placa perfurada ilhada 5×7 cm — 1",
-         "Barra de pinos fêmea 40 vias — 1", "Borne 4 vias + caixinha patola + fios", "Cabo USB de dados (gravar o programa)"]
+         "Barra fêmea 40 vias + diodo 1N5819 (proteção)", "Borne 4 vias + caixinha patola + fios", "Cabo USB de dados (gravar o programa)"]
 for i, t in enumerate(pecas):
     col, lin = i // 3, i % 3
     label(90 + col * 560, 1015 + lin * 32, "• " + t, 17, "#FFFFFF", "normal", "start")

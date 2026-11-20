@@ -7,6 +7,7 @@ Versão 1 · 20/11/2026 · placa perfurada com peças prontas. [VALIDAR] = confe
 |---|---|---|
 | 2 | ESP32 DevKit V1 (ESP32-WROOM-32, 30 pinos, micro-USB ou USB-C) | "esp32 wroom devkit 30 pinos" |
 | 2 | Transistor BC337 (NPN, saída) — 1 + 1 reserva | "bc337" |
+| 1 | Diodo Schottky 1N5819 (protege se ligar 12V e GND invertidos) | "1n5819" |
 | 1 | Conversor step-down LM2596 (com trimpot) ou MP1584 | "step down lm2596" |
 | 1 pct | Resistores 1/4 W: 1 kΩ, 10 kΩ, 47 kΩ, 100 kΩ (kit sortido serve) | "kit resistores 1/4w" |
 | 2 | Transistor BC547 (NPN) | "bc547" |
@@ -29,7 +30,7 @@ Se o SINAL parado for 0 V e subir na moeda (lógica invertida), **pare e avise**
 ## 3. Mapa de ligação
 ```
 MÁQUINA (chicote)         PLACA MV
- 12V  ──────────────────► IN+ step-down ──(5,0 V)──► OUT+ ──► VIN do ESP32
+ 12V  ──► diodo 1N5819 (faixa para o lado do step-down) ──► IN+ step-down ──(5,0 V)──► OUT+ ──► VIN do ESP32
  GND  ───────────────┬──► IN- step-down ── OUT- ──► GND do ESP32
                      ├──► BC547 emissor (E)
                      ├──► resistor 100k ──► BC547 base (B)
