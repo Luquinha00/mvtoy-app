@@ -59,9 +59,9 @@ O moedeiro **continua ligado** no chicote como sempre: a placa fica em paralelo 
 
 ## 6. Teste na bancada (sem máquina)
 - Fonte 12 V no borne, LED do ESP32 acende.
-- Com um fio, encoste SINAL no GND rapidamente → conta 1 moeda (aparece no app quando a maquininha estiver ligada).
+- Com um fio, encoste SINAL no GND rapidamente → conta 1 moeda (aparece no app › Placas em "Moedas hoje").
 - No app › Placas › Crédito → com o multímetro entre SINAL e GND, a tensão cai a 0 V por um instante.
 
 ## 7. Teste na máquina
-Instale no chicote, entre no modo operador da maquininha, ligue a placa pelo QR e faça o **crédito de teste**: a máquina tem que mostrar 1 crédito. Coloque 1 moeda: tem que contar 1 crédito **e** aparecer no app.
+Instale no chicote, no app › Placas › "Ligar placa à máquina" (QR da placa) e faça o **crédito de teste**: a máquina tem que mostrar 1 crédito. Coloque 1 moeda: tem que contar 1 crédito **e** aparecer no app.
 Anote para o desenho da placa definitiva: modelo da máquina, tensão do SINAL, duração do pulso que funcionou, tipo de conector do chicote (foto).
