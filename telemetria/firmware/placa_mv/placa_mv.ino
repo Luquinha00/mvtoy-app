@@ -9,9 +9,10 @@
    3) Avisa o servidor a cada ~5 s que está online.
 
   LIGAÇÃO: ver telemetria/MONTAGEM.md (mapa para o montador).
-   - ENTRADA: +12 V → resistor 2,2k → pino 1 (ânodo) do PC817 #1; pino 2 (cátodo) → fio SINAL do moedeiro;
-              pino 4 (coletor) → GPIO 27; pino 3 (emissor) → GND.  (Moeda puxa o SINAL para 0 V → LED acende → GPIO 27 vai a 0.)
-   - SAÍDA:   GPIO 26 → resistor 330 → pino 1 do PC817 #2; pino 2 → GND;
+   - ENTRADA: SINAL → resistor 47k → base do transistor BC547; resistor 100k entre base e GND; emissor → GND;
+              coletor → GPIO 27 + resistor 10k ao 3V3.  (Parado: GPIO 27 = 0. Moeda puxa o SINAL a 0 V → GPIO 27 sobe.)
+              Funciona com sinal de 5, 12 ou 24 V sem ajuste.
+   - SAÍDA:   GPIO 26 → resistor 330 → pino 1 do PC817; pino 2 → GND;
               pino 4 (coletor) → fio SINAL; pino 3 (emissor) → GND.  (GPIO 26 em 1 → SINAL vai a 0 V = "uma moeda".)
    - Alimentação: 12 V da máquina → conversor step-down ajustado em 5,0 V → pino VIN do ESP32; GND comum.
    - Enquanto a placa solta crédito, ela ignora a entrada (o próprio pulso não vira "moeda").
@@ -186,7 +187,7 @@ void setup() {
   pinMode(PINO_CREDITO, OUTPUT); digitalWrite(PINO_CREDITO, LOW);
   pinMode(PINO_LED, OUTPUT);
   pinMode(PINO_MOEDA, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PINO_MOEDA), aoPulsoMoeda, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PINO_MOEDA), aoPulsoMoeda, RISING);  // entrada por transistor: moeda = GPIO sobe
   mem.begin("placamv", false);
   loteAtual = mem.getUInt("lote", 0);
   proxFeito = mem.getInt("prox", 0);

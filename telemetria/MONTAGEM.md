@@ -6,9 +6,10 @@ Versão 1 · 20/11/2026 · placa perfurada com peças prontas. [VALIDAR] = confe
 | Qtd | Peça | Como procurar no Mercado Livre |
 |---|---|---|
 | 2 | ESP32 DevKit V1 (ESP32-WROOM-32, 30 pinos, micro-USB ou USB-C) | "esp32 wroom devkit 30 pinos" |
-| 1 pct | Optoacoplador PC817 DIP-4 (pacote de 10) | "pc817 dip4 10 peças" |
+| 1 pct | Optoacoplador PC817 DIP-4 (pacote de 10) — só 1 por placa | "pc817 dip4 10 peças" |
 | 1 | Conversor step-down LM2596 (com trimpot) ou MP1584 | "step down lm2596" |
-| 1 pct | Resistores 1/4 W: 330 Ω, 2,2 kΩ (kit sortido serve) | "kit resistores 1/4w" |
+| 1 pct | Resistores 1/4 W: 330 Ω, 10 kΩ, 47 kΩ, 100 kΩ (kit sortido serve) | "kit resistores 1/4w" |
+| 2 | Transistor BC547 (NPN) | "bc547" |
 | 1 | Placa perfurada (ilhada) 5×7 cm | "placa perfurada ilhada 5x7" |
 | 1 | Barra de pinos fêmea 40 vias (para o ESP32 encaixar, sem soldar direto) | "barra pinos femea 2.54" |
 | 1 | Borne de parafuso 2,54/5,08 mm de 4 vias (entrada: 12V · GND · SINAL) | "borne kre 4 vias" |
@@ -28,26 +29,28 @@ Se o SINAL parado for 0 V e subir na moeda (lógica invertida), **pare e avise**
 ## 3. Mapa de ligação
 ```
 MÁQUINA (chicote)         PLACA MV
- 12V  ───────────────┬──► IN+ step-down ──(5,0 V)──► OUT+ ──► VIN do ESP32
-                     │
-                     └──► resistor 2,2k ──► PC817 #1 pino 1
+ 12V  ──────────────────► IN+ step-down ──(5,0 V)──► OUT+ ──► VIN do ESP32
  GND  ───────────────┬──► IN- step-down ── OUT- ──► GND do ESP32
-                     ├──► PC817 #1 pino 3
-                     ├──► PC817 #2 pino 2
-                     └──► PC817 #2 pino 3
- SINAL ──────────────┬──► PC817 #1 pino 2
-                     └──► PC817 #2 pino 4
+                     ├──► BC547 emissor (E)
+                     ├──► resistor 100k ──► BC547 base (B)
+                     ├──► PC817 pino 2
+                     └──► PC817 pino 3
+ SINAL ──────────────┬──► resistor 47k ──► BC547 base (B)
+                     └──► PC817 pino 4
 
- ESP32 GPIO 27 ◄──────── PC817 #1 pino 4        (entrada: lê a moeda)
- ESP32 GPIO 26 ──► resistor 330 ──► PC817 #2 pino 1   (saída: solta o crédito)
+ ESP32 GPIO 27 ◄──┬───── BC547 coletor (C)            (entrada: lê a moeda)
+ ESP32 3V3 ──► resistor 10k ──┘
+ ESP32 GPIO 26 ──► resistor 330 ──► PC817 pino 1      (saída: solta o crédito)
 ```
 PC817 visto de cima, bolinha/marca no canto: **pino 1** = ânodo (marca) · **2** = cátodo (embaixo do 1) · **3** = emissor (em frente ao 2) · **4** = coletor (em frente ao 1).
+Por que transistor na entrada: funciona com sinal de 5, 12 ou 24 V sem ajuste e quase não pesa no fio do moedeiro.
 
 O moedeiro **continua ligado** no chicote como sempre: a placa fica em paralelo (se ela falhar, a moeda funciona).
 
 ## 4. Ordem de montagem
 1. Ajuste o step-down **sozinho**: ligue 12 V na entrada e gire o trimpot até a saída marcar **5,0 V** no multímetro. Só depois ligue no ESP32.
-2. Solde na placa perfurada: barra fêmea do ESP32, os 2 PC817, os 2 resistores, o borne de 3–4 vias.
+2. Solde na placa perfurada: barra fêmea do ESP32, o BC547, o PC817, os 4 resistores e o borne de 3–4 vias.
+   BC547 com a parte reta virada para você: pernas da esquerda para a direita = C, B, E.
 3. Faça as ligações do mapa com fio fino. Confira cada ligação com o multímetro (modo continuidade, o "bip").
 4. Encaixe o ESP32 na barra fêmea, isole com termo-retrátil e feche na caixinha (furo para os fios e para ver o LED azul).
 

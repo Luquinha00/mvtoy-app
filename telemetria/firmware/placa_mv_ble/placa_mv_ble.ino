@@ -140,7 +140,7 @@ void lerSerial() {   // gravação na bancada: "CFG MVP-0001 <segredo>"
 void setup() {
   Serial.begin(115200);
   pinMode(PINO_CREDITO, OUTPUT); digitalWrite(PINO_CREDITO, LOW); pinMode(PINO_LED, OUTPUT);
-  pinMode(PINO_MOEDA, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_MOEDA), aoPulsoMoeda, FALLING);
+  pinMode(PINO_MOEDA, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_MOEDA), aoPulsoMoeda, RISING);  // entrada por transistor: moeda = GPIO sobe
   mem.begin("placamv", false);
   loteAtual = mem.getUInt("lote", 0); proxFeito = mem.getInt("prox", 0);
   for (int i = 0; i < MAX_FEITOS; i++) { feitos[i] = mem.getString(("f" + String(i)).c_str(), ""); feitoConfirmado[i] = false; }
