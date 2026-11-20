@@ -8,14 +8,13 @@
       para a placa da máquina, como se fosse uma moeda.
    3) Avisa o servidor a cada ~5 s que está online.
 
-  LIGAÇÃO (sempre com isolador óptico — o moedeiro é 12 V, o ESP32 é 3,3 V):
-   - Entrada  (PINO_MOEDA): fio de SINAL do moedeiro → resistor 1k → LED do PC817;
-                             coletor do PC817 → GPIO 27 (pull-up interno); emissor → GND do ESP32.
-   - Saída    (PINO_CREDITO): GPIO 26 → resistor 1k → LED de outro PC817;
-                             coletor/emissor desse PC817 em paralelo com o fio de SINAL e o GND da máquina
-                             (fecha o sinal para o GND = "uma moeda").
-   - Alimentação: 12 V da máquina → conversor step-down 5 V → pino 5V/VIN do ESP32.
-   - Os GND da máquina e do ESP32 NÃO se ligam direto: quem faz a ponte é o isolador.
+  LIGAÇÃO: ver telemetria/MONTAGEM.md (mapa para o montador).
+   - ENTRADA: +12 V → resistor 2,2k → pino 1 (ânodo) do PC817 #1; pino 2 (cátodo) → fio SINAL do moedeiro;
+              pino 4 (coletor) → GPIO 27; pino 3 (emissor) → GND.  (Moeda puxa o SINAL para 0 V → LED acende → GPIO 27 vai a 0.)
+   - SAÍDA:   GPIO 26 → resistor 330 → pino 1 do PC817 #2; pino 2 → GND;
+              pino 4 (coletor) → fio SINAL; pino 3 (emissor) → GND.  (GPIO 26 em 1 → SINAL vai a 0 V = "uma moeda".)
+   - Alimentação: 12 V da máquina → conversor step-down ajustado em 5,0 V → pino VIN do ESP32; GND comum.
+   - Enquanto a placa solta crédito, ela ignora a entrada (o próprio pulso não vira "moeda").
 
   CONFIGURAÇÃO SEM REGRAVAR (v0.2):
    - O mesmo programa serve para todas as placas. Na primeira vez (ou segurando o botão BOOT por 5 s ao ligar),
@@ -48,6 +47,7 @@ const uint32_t DEBOUNCE_US = 15000; // ignora repiques < 15 ms
 // ---------- ESTADO ----------
 volatile uint32_t moedasPendentes = 0;
 volatile uint32_t ultimoPulsoUs = 0;
+volatile bool emitindo = false;   // enquanto a placa solta crédito, o próprio pulso não conta como moeda
 uint32_t pulsoMs = 60, intervaloMs = 80;
 uint32_t loteAtual = 0, moedasDoLote = 0;
 long deltaRelogio = 0;          // diferença entre o relógio do servidor e o millis()
@@ -61,6 +61,7 @@ bool feitoConfirmado[MAX_FEITOS];
 int proxFeito = 0;
 
 void IRAM_ATTR aoPulsoMoeda() {
+  if (emitindo) return;
   uint32_t agora = micros();
   if (agora - ultimoPulsoUs > DEBOUNCE_US) { moedasPendentes++; ultimoPulsoUs = agora; }
 }
@@ -78,12 +79,14 @@ void marcarFeito(const String& id) {
 }
 
 void darCredito(int pulsos) {
+  emitindo = true;
   for (int i = 0; i < pulsos; i++) {
     digitalWrite(PINO_CREDITO, HIGH);   // PC817 conduz: sinal da máquina vai ao GND
     delay(pulsoMs);
     digitalWrite(PINO_CREDITO, LOW);
     delay(intervaloMs);
   }
+  delay(30); emitindo = false;
 }
 
 String hmacHex(const String& msg) {

@@ -12,8 +12,8 @@
       CFG MVP-0001 <segredo>      (o app › Placas › Placa nova mostra os dois)
   e ficam na memória. Nenhum segredo neste arquivo.
 
-  Ligação (igual à v0.2): entrada do moedeiro no GPIO 27 via PC817; saída de crédito no GPIO 26 via PC817;
-  alimentação 12 V → step-down 5 V. Encaixe em paralelo no chicote: se a placa falhar, a moeda continua funcionando.
+  Ligação: telemetria/MONTAGEM.md (entrada GPIO 27 e saída GPIO 26 via PC817; 12 V → step-down 5 V → VIN).
+  Encaixe em paralelo no chicote: se a placa falhar, a moeda continua funcionando.
 
   BLE — serviço MV (UUIDs fixos, o app da maquininha procura por eles):
    - PACOTE  (leitura + aviso): {"ts":..,"corpo":"<json>","sig":"<hex>"}  → a maquininha envia ao tel-sync
@@ -44,6 +44,7 @@ char PLACA_SEGREDO[65] = "";
 Preferences mem;
 
 volatile uint32_t moedasPendentes = 0, ultimoPulsoUs = 0;
+volatile bool emitindo = false;   // enquanto a placa solta crédito, o próprio pulso não conta como moeda
 uint32_t pulsoMs = 60, intervaloMs = 80, loteAtual = 0, moedasDoLote = 0;
 long deltaRelogio = 0;
 bool primeiroEnvio = true, conectado = false;
@@ -54,7 +55,7 @@ String feitos[MAX_FEITOS]; bool feitoConfirmado[MAX_FEITOS]; int proxFeito = 0;
 BLECharacteristic *chPacote, *chResposta, *chInfo;
 String respostaPendente; volatile bool temResposta = false;
 
-void IRAM_ATTR aoPulsoMoeda() { uint32_t a = micros(); if (a - ultimoPulsoUs > DEBOUNCE_US) { moedasPendentes++; ultimoPulsoUs = a; } }
+void IRAM_ATTR aoPulsoMoeda() { if (emitindo) return; uint32_t a = micros(); if (a - ultimoPulsoUs > DEBOUNCE_US) { moedasPendentes++; ultimoPulsoUs = a; } }
 
 String hmacHex(const String& msg) {
   byte out[32]; mbedtls_md_context_t ctx; mbedtls_md_init(&ctx);
@@ -72,7 +73,9 @@ void marcarFeito(const String& id) {
   mem.putInt("prox", proxFeito);
 }
 void darCredito(int pulsos) {
+  emitindo = true;
   for (int i = 0; i < pulsos; i++) { digitalWrite(PINO_CREDITO, HIGH); delay(pulsoMs); digitalWrite(PINO_CREDITO, LOW); delay(intervaloMs); }
+  delay(30); emitindo = false;
 }
 
 // monta o pacote assinado que a maquininha vai levar ao servidor
