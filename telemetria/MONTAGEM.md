@@ -1,23 +1,25 @@
 # Telemetria MV Toy — montagem do piloto (para o montador)
 
-Versão 1 · 20/11/2026 · placa perfurada com peças prontas. [VALIDAR] = conferir na máquina antes.
+Versão 4 · 23/11/2026 · placa perfurada com peças prontas. [VALIDAR] = conferir na máquina antes.
 
 ## 1. Lista de compra (1 placa + reservas)
-| Qtd | Peça | Como procurar no Mercado Livre |
+| Qtd | Peça | Onde comprar (busca no Mercado Livre) |
 |---|---|---|
-| 2 | ESP32 DevKit V1 (ESP32-WROOM-32, 30 pinos, micro-USB ou USB-C) | "esp32 wroom devkit 30 pinos" |
-| 2 | Transistor BC337 (NPN, saída) — 1 + 1 reserva | "bc337" |
-| 1 | Diodo Schottky 1N5819 (protege se ligar 12V e GND invertidos) | "1n5819" |
-| 1 | Conversor step-down LM2596 (com trimpot) ou MP1584 | "step down lm2596" |
-| 1 pct | Resistores 1/4 W: 1 kΩ, 10 kΩ, 47 kΩ, 100 kΩ (kit sortido serve) | "kit resistores 1/4w" |
-| 2 | Transistor BC547 (NPN) | "bc547" |
-| 1 | Placa perfurada (ilhada) 5×7 cm | "placa perfurada ilhada 5x7" |
-| 1 | Barra de pinos fêmea 40 vias (para o ESP32 encaixar, sem soldar direto) | "barra pinos femea 2.54" |
-| 1 | Borne de parafuso 2,54/5,08 mm de 4 vias (entrada: 12V · GND · SINAL) | "borne kre 4 vias" |
+| 2 | ESP32 DevKit V1 (ESP32-WROOM-32, 30 pinos) — **de preferência com chip USB CP2102** (escrito no anúncio): o Windows reconhece sem instalar driver. Se vier com CH340, instale o driver CH340 antes de gravar | https://lista.mercadolivre.com.br/esp32-wroom-devkit-30-pinos-cp2102 |
+| 2 | Transistor BC337 (NPN, saída) — 1 + 1 reserva | https://lista.mercadolivre.com.br/bc337 |
+| 1 | Diodo Schottky 1N5819 (protege se ligar 12V e GND invertidos) | https://lista.mercadolivre.com.br/1n5819 |
+| 1 | Conversor step-down LM2596 (com trimpot) ou MP1584 | https://lista.mercadolivre.com.br/step-down-lm2596 |
+| 1 pct | Resistores 1/4 W: 1 kΩ, 10 kΩ, 47 kΩ, 100 kΩ (kit sortido serve) | https://lista.mercadolivre.com.br/kit-resistores-1-4w |
+| 2 | Transistor BC547 (NPN) | https://lista.mercadolivre.com.br/bc547 |
+| 1 | Placa perfurada (ilhada) 5×7 cm | https://lista.mercadolivre.com.br/placa-perfurada-ilhada-5x7 |
+| 1 | Barra de pinos fêmea 40 vias (para o ESP32 encaixar, sem soldar direto) | https://lista.mercadolivre.com.br/barra-pinos-femea-2.54 |
+| 1 | Borne de parafuso 2,54/5,08 mm de 4 vias (entrada: 12V · GND · SINAL) | https://lista.mercadolivre.com.br/borne-kre-4-vias |
 | 1 | Caixa impressa em 3D em PETG ou ABS (`hardware/caixa/caixa_telemetria_mvtoy_base.stl` e `_tampa.stl`) — ou caixa patola ~8×5×3 cm | gráfica 3D local |
-| 4+4 | Parafusos auto-atarraxantes M2×6 (placa) e M3×8 (tampa) | "parafuso m2 auto atarraxante" |
+| 4+4 | Parafusos auto-atarraxantes M2×6 (placa) e M3×8 (tampa) | https://lista.mercadolivre.com.br/parafuso-m2-auto-atarraxante |
 | — | Fio cabinho fino, espaguete termo-retrátil, abraçadeiras | |
 | 1 | Cabo USB de dados (para gravar) | |
+
+Custo estimado das peças: R$ 150 a R$ 250 com reservas [VALIDAR no carrinho]. Caixa 3D: serviço de impressão local, PETG, ~R$ 30–60 [VALIDAR].
 
 Ferramentas (se o montador não tiver): ferro de solda 40–60 W com estanho 0,8 mm, multímetro, alicate de corte, sugador de solda.
 
