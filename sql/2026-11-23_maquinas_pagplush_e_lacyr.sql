@@ -23,12 +23,12 @@ insert into public.mvt_maquinas(codigo,tipo,premio,ponto,cidade,dono,status) val
  ('MVT-0050','Tesoura',null,'Lago Azul KM 58 — corredor externo','—','MV Toy','Ativa'),
  ('MVT-0052','Tesoura',null,'Lago Azul KM 72 — corredor externo','—','MV Toy','Ativa'),
  -- Parceria Lacyr · lote SmartMach (Lacyr 40% · irmãos Marques 30% · MV Toy 30%) — chegando, ponto a definir
- ('MVT-0053','Caixa Surpresa · Splendor (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
- ('MVT-0054','Caixa Surpresa · Locker 12 portas (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
- ('MVT-0055','MV Cards · Elegance Ambient (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
- ('MVT-0056','Pula Pula snacks e bebidas · Elegance Cool (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
- ('MVT-0057','Trostdorf Parfums · Elegance Max (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
- ('MVT-0058','Petizzo Surpresa · Splendor Pet (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque')
+ ('MVT-0051','Caixa Surpresa · Splendor (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
+ ('MVT-0053','Caixa Surpresa · Locker 12 portas (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
+ ('MVT-0054','MV Cards · Elegance Ambient (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
+ ('MVT-0055','Pula Pula snacks e bebidas · Elegance Cool (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
+ ('MVT-0056','Trostdorf Parfums · Elegance Max (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque'),
+ ('MVT-0057','Petizzo Surpresa · Splendor Pet (SmartMach)',null,'A definir — lote SmartMach','—','Projeto SmartMach (Lacyr 40% · Marques 30% · MV Toy 30%)','Em estoque')
 on conflict (codigo) do update set tipo=excluded.tipo, ponto=excluded.ponto, cidade=excluded.cidade,
   premio=coalesce(excluded.premio, public.mvt_maquinas.premio), status=excluded.status, atualizado_em=now();
 
