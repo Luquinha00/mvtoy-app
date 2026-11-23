@@ -72,3 +72,43 @@ Códigos LCSC exatos a confirmar na hora do pedido [VALIDAR estoque], preferindo
 - Saída por transistor NPN (não optoacoplador): simulação ngspice (telemetria/simulacao/saida.cir) — PC817 com CTR 50–200% não puxa o sinal a 0 V em 12 V/1k e 24 V/1k–4,7k; NPN fica abaixo de 0,1 V em todos os casos.
 - Entrada simulada (simulacao/entrada.cir): 5/12/24 V × pull-up 1k/4,7k/10k → GPIO 0,03–0,05 V parado e 3,3 V na moeda; a carga da placa baixa o sinal parado no máximo 15% (5 V/10k → 4,24 V, acima do limite lógico de 3,5 V).
 - Simulações (telemetria/simulacao/LEIA.md): elétrica 5/12/24 V, transitório com cabo e ruído, firmware 18/18 e servidor — todas aprovadas após as correções.
+
+---
+
+## v0.3 · 23/11/2026 — o que aprendemos com a PAGBox (PagPlush) e as melhorias
+
+Fonte: 3 vídeos de instalação de uma PAGBox numa garra (enviados pelo Lucas, 23/11). Só imagem, sem o áudio.
+
+### Placa-mãe da garra (conector principal, chicote branco)
+Serigrafia lida na placa: `GND · GND · GND · COINA · COINB · OUT · L1 · 12V · 12V · IN · 12V · Sensor …` (+ botão SET).
+- **COINA** = pulso do moedeiro (é onde a PAGBox entrega o crédito, em paralelo).
+- **COINB** = segunda entrada de crédito (noteiro ou 2º moedeiro) [VALIDAR].
+- **OUT / Sensor** = provável sinal de prêmio saindo (sensor da boca de saída) [VALIDAR com multímetro].
+- **12V e GND** = alimentação disponível no próprio conector.
+- Passo do conector: ~2,5 mm (tipo JST XH ou parecido) [VALIDAR com paquímetro].
+
+### Como a PAGBox é feita (observado)
+| Bloco | PAGBox | Nossa placa final v1 (decisão) |
+|---|---|---|
+| Processador | módulo ESP32 (Wi-Fi/BLE) | ESP32-C3 (igual em função, mais barato) |
+| Saída de crédito | **relé mecânico Songle SRD-09VDC** (contato seco: serve para sinal ativo em 0 V ou em 12 V) | **relé de estado sólido PhotoMOS** (ex.: AQY212/PS7341): contato seco como o relé, mas sem barulho, sem desgaste e menor. Mantém o BC337 como opção de montagem barata |
+| Entradas | **4 optoacopladores** (entradas isoladas) | **3 entradas** com transistor/opto: COINA (moedas), COINB (noteiro), PRÊMIO (sensor de saída) |
+| Alimentação | regulador chaveado com indutor e capacitores 470 µF/50 V; serigrafia "5–12V" | buck 9–24 V → 5 V 3 A + 3,3 V; diodo contra inversão + TVS |
+| USB-A fêmea | sim (provável saída 5 V para alimentar a maquininha) [VALIDAR] | **USB-A 5 V 2 A** para manter a maquininha sempre carregada |
+| Conectores | bornes de parafuso + 2 conectores JST brancos | bornes + **chicote em Y "plug and play"** |
+| Caixa | **nenhuma** (placa solta em cima da fonte de metal: risco de curto) | caixa 3D com QR e furos de fixação |
+| Instalação | fios enfiados por trás do conector da placa-mãe | **chicote em Y**: encaixa entre o chicote e a placa-mãe, sem cortar nem enfiar fio |
+| Pareamento | QR na placa abre página pública com ID **e senha de 4 dígitos** (quem fotografa o QR tem a senha) | QR só com o número (TMV-xxxx); ligar exige login no app; a chave nunca aparece |
+
+### O que muda no produto (melhorias sobre a PagPlush)
+1. **Contar prêmios** (entrada PRÊMIO): mostra no app quantas pelúcias saíram, custo do prêmio por jogada e a taxa de pagamento da garra. A PagPlush, pelo que vimos, não mostra isso no app [VALIDAR].
+2. **Contar noteiro separado do moedeiro** (COINB).
+3. **Saída universal** (PhotoMOS): funciona em qualquer máquina, sinal ativo em 0 V ou em 12 V.
+4. **Alimentar a maquininha** pela USB da placa.
+5. **Instalação em 5 minutos** com o chicote em Y, sem ferramenta.
+6. **Segurança**: QR sem senha, pacotes assinados (protocolo 2).
+7. **Caixa protegida** e fixa na máquina.
+
+### Pendências para fechar a placa final
+- Medir na garra: tensão e polaridade de COINA, COINB, OUT e Sensor; tipo e passo do conector branco (foto de perto + paquímetro).
+- Firmware: incluir a entrada PRÊMIO e COINB no pacote (`premios`, `notas`), e o servidor guardar os eventos `premio` e `nota`.
