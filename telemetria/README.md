@@ -1,5 +1,8 @@
 # Telemetria MV Toy (telemetria própria) — v0.4 · protocolo 2 · 20/11/2026
 
+> **Duas linhas (23/11/2026):** **Pulso** (garra, soco, basquete, fliperama · placas TMV-…, tudo abaixo) e **MDB** (vending machines · placas TMD-…, ver `mdb/ESPECIFICACAO.md`). Mesmo app, servidor e banco; o banco guarda a linha na coluna `tipo` e as vendas MDB como evento `venda` (seleção + preço).
+
+
 Produto para as máquinas próprias, para a rede de franquia e para venda a operadores de fora
 (modelo PagPlush: implantação R$ 600 + R$ 60/mês por máquina). Estudo: Drive › 06. Operação_MV Toy (Central C-0393).
 
