@@ -24,6 +24,15 @@ Usada só como referência de funções. **Não copiamos a placa nem o programa 
 
 Leitura: a PagPlush fez **uma placa que serve para pulso e para MDB**. Para nós, isso confirma o caminho de ter as duas linhas com a mesma base (ESP32, fonte, servidor e app) e mudar só a parte que conversa com a máquina.
 
+### 1b. Referência 2: placa MDB_V33.0 da máquina de capacete (fotos de 23/11/2026)
+
+- Placa preta "MDB_V33.0" com um **STM32**.
+- Conectores: 6 vias (2×3) MDB/"GND TX RX"; alimentação 12/24 V; serial de 4 vias "GND RX TX 5V" para a placa principal; e "DIO-GND-CLK-3V3" para gravar.
+- Funciona como **conversor MDB ↔ serial**. Isso confirma o caminho (B) deste documento: um STM32 cuida do MDB e o ESP32 cuida da internet.
+- O programa é gravado com o **ST-LINK V2** ligado no notebook, usando o STM32CubeProgrammer (gratuito). Ligação: SWDIO→DIO, GND→GND, SWCLK→CLK, 3,3V→3V3.
+- No verso alguém escreveu "Ruim PT" à mão [VALIDAR se a placa está com defeito].
+- Registro completo e fotos: Drive › 06. Operação_MV Toy › "Referências de placas — Máquina de capacete (MDB) e PagPlush MDB · 23-11-2026".
+
 ## 2. O padrão MDB (o essencial)
 
 - MDB/ICP (NAMA), versão 4.x. A placa da máquina (VMC) é a mestra e chama os aparelhos pelo endereço. Exemplos: moedeiro 08h, noteiro 30h, **leitor cashless nº 1: 10h**, cashless nº 2: 60h.
@@ -50,7 +59,7 @@ Leitura: a PagPlush fez **uma placa que serve para pulso e para MDB**. Para nós
 - **9º bit no ESP32**: o ESP32 não tem 9 bits nativos. Dois caminhos, a testar em bancada:
   - (A) usar a paridade da serial como 9º bit, como fazem projetos abertos de MDB com ESP32;
   - (B) um microcontrolador pequeno só para o MDB (ex.: ATmega328 ou STM32, que têm 9 bits), ligado ao ESP32.
-  Começar por (A); se perder bytes na escuta, ir para (B).
+  Começar por (A); se perder bytes na escuta, ir para (B). A placa da máquina de capacete usa justamente o (B), com um STM32 gravado pelo ST-LINK V2.
 - **Opcional**: relé e 2 entradas de pulso (como a PagPlush), para uma futura placa "universal".
 
 ## 5. Software
