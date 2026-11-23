@@ -197,25 +197,28 @@ document.addEventListener('click',e=>{const x=e.target.closest('[data-ir]');if(x
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-visita]');if(b)formVisita(b.dataset.visita)});
 
 // ---------- lista de máquinas ----------
-let FILTRO={q:'',st:''};
+let FILTRO={q:'',st:'',mk:''};
+const marcaDe=m=>m.marca||'MV Toy';
 function telaMaquinas(){
   if(!D.pode.dinheiro)return telaRota();
   const lista=()=>{const q=FILTRO.q.toLowerCase();
-    const ms=D.maquinas.filter(m=>(!FILTRO.st||situacao(m).t===FILTRO.st||m.status===FILTRO.st)&&(!q||[m.codigo,m.tipo,m.ponto,m.cidade,m.dono,m.premio].join(' ').toLowerCase().includes(q)))
+    const ms=D.maquinas.filter(m=>(!FILTRO.st||situacao(m).t===FILTRO.st||m.status===FILTRO.st)&&(!FILTRO.mk||marcaDe(m)===FILTRO.mk)&&(!q||[m.codigo,m.tipo,m.ponto,m.cidade,m.dono,m.premio,marcaDe(m)].join(' ').toLowerCase().includes(q)))
       .map(m=>({m,f:fat(m,MES),ant:fat(m,mesAnterior(MES)),c:contas(MES,m.codigo)})).sort((a,b)=>(b.f??-1)-(a.f??-1));
     const mx=Math.max(1,...ms.map(x=>x.f||0));const tot=ms.reduce((s,x)=>s+(x.f||0),0);
     return `<p class="sub" style="margin-bottom:6px">${ms.length} máquina(s) · ${brl(tot)} em ${nomeMes(MES)}</p><div class="wrap"><table><tr><th>Máquina</th><th class="cj">Ponto</th><th>Situação</th><th class="r">Faturamento</th><th class="r cj">Resultado</th></tr>`+
     ms.map(({m,f,ant,c})=>{const dv=(MES!==mesAtual()&&f!==null&&ant>0)?(f/ant-1)*100:null;
-     return `<tr class="clic" data-cod="${m.codigo}"><td><a class="mvt" href="#m/${m.codigo}">${m.codigo}</a><small>${esc(m.tipo)}${m.premio&&m.premio!=='sem prêmio'?' · '+esc(m.premio):''}${m.jogada?' · '+esc(m.jogada):''} · ${LINHAS[linhaDe(m.tipo)].nome}</small><small class="so-mob">${esc(m.ponto)}</small></td>
+     return `<tr class="clic" data-cod="${m.codigo}"><td><a class="mvt" href="#m/${m.codigo}">${m.codigo}</a><small>${esc(m.tipo)}${m.premio&&m.premio!=='sem prêmio'?' · '+esc(m.premio):''}${m.jogada?' · '+esc(m.jogada):''} · ${LINHAS[linhaDe(m.tipo)].nome}${marcaDe(m)!=='MV Toy'?' · <b>'+esc(marcaDe(m))+'</b>':''}</small><small class="so-mob">${esc(m.ponto)}</small></td>
      <td class="cj">${esc(m.ponto)}<small>${esc(m.cidade)}${D.eu.papel!=='investidor'?' · '+esc(m.dono||''):''}</small></td><td>${stTag(m)}</td>
      <td class="r">${f===null?'<small>sem dado</small>':brl(f)+(dv===null?'':`<small style="color:${dv>=0?'var(--vd)':'var(--rt)'}">${dv>=0?'▲':'▼'} ${Math.abs(dv).toFixed(0)}%</small>`)}<div class="bar"><i style="width:${f?Math.round(f/mx*100):0}%"></i></div></td>
      <td class="r cj">${c.saidas||c.entradas?brl(c.resultado):'<small>—</small>'}</td></tr>`}).join('')+`</table></div>`};
   $('#app').innerHTML=seletorMes()+`<div class="card"><h2>Máquinas ${parcial()}${D.pode.editar?'<button class="btn acao" id="novaMaq">+ Nova máquina</button>':''}</h2>
    <div class="busca"><input id="fq" placeholder="Buscar por código, ponto, cidade, prêmio…" value="${esc(FILTRO.q)}">
+   <select id="fmk"><option value="">Todas as marcas</option>${[...new Set(D.maquinas.map(marcaDe))].sort().map(k=>`<option ${FILTRO.mk===k?'selected':''}>${esc(k)}</option>`).join('')}</select>
    <select id="fst"><option value="">Todas as situações</option>${['Forte','Média','Fraca','Em queda','Sem dado',...STATUS.filter(s=>s!=='Ativa')].map(s=>`<option ${FILTRO.st===s?'selected':''}>${s}</option>`).join('')}</select></div>
    <div id="lista">${lista()}</div></div>`;
   $('#fq').oninput=e=>{FILTRO.q=e.target.value;$('#lista').innerHTML=lista()};
   $('#fst').onchange=e=>{FILTRO.st=e.target.value;$('#lista').innerHTML=lista()};
+  $('#fmk').onchange=e=>{FILTRO.mk=e.target.value;$('#lista').innerHTML=lista()};
   if($('#novaMaq'))$('#novaMaq').onclick=()=>formMaquina(null)}
 
 // ---------- ficha da máquina ----------
@@ -383,6 +386,8 @@ function formMaquina(m){const novo=!m;m=m||{codigo:'',tipo:'Garra',status:'Ativa
    <datalist id="tiposM">${[...new Set(D.maquinas.map(x=>x.tipo))].map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
    <div><label>Ponto</label><input id="mPon" value="${esc(m.ponto||'')}"></div>
    <div class="lin"><div><label>Cidade</label><input id="mCid" value="${esc(m.cidade||'')}"></div><div><label>Prêmio</label><input id="mPre" value="${esc(m.premio||'')}" placeholder="Disney, Tradicional, sem prêmio"></div></div>
+   <div><label>Marca</label><input id="mMarca" value="${esc(m.marca||'MV Toy')}" list="marcasM"><datalist id="marcasM">${[...new Set(['MV Toy','MV Cards','Pula Pula','Trostdorf Parfums','Petizzo Surpresa','Print My Case (licenciado)',...D.maquinas.map(marcaDe)])].map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
+   <p class="mini">O código MVT é a máquina física; a marca é o que ela vende.</p></div>
    <div><label>Dono / sociedade</label><input id="mDon" value="${esc(m.dono||'MV Toy')}" list="donosM"></div>
    <datalist id="donosM">${[...new Set(D.maquinas.map(x=>x.dono).filter(Boolean))].map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
    <div class="lin"><div><label>Comissão do ponto (%)</label><input id="mCp" type="number" min="0" max="100" step="0.01" value="${m.comissao_pct??''}" placeholder="ex.: 20"></div>
@@ -398,9 +403,10 @@ function formMaquina(m){const novo=!m;m=m||{codigo:'',tipo:'Garra',status:'Ativa
    (m.itens||[]).forEach(i=>linhaItem(i.produto_id,i.qtd));if(!(m.itens||[]).length&&novo)linhaItem('',1);
    w.querySelector('#mAddItem').onclick=()=>linhaItem('',1);
    w.querySelector('#fm').onsubmit=async e=>{e.preventDefault();w.querySelector('#mMsg').textContent='Salvando…';
-    const d=await rpc('mvt_admin_maquina',{p_sessao:S(),p_novo:novo,p_codigo:g('#mCod'),p_tipo:g('#mTipo'),p_ponto:g('#mPon'),p_cidade:g('#mCid'),
+    const corpo={p_sessao:S(),p_novo:novo,p_codigo:g('#mCod'),p_tipo:g('#mTipo'),p_ponto:g('#mPon'),p_cidade:g('#mCid'),
       p_jogada:g('#mJog'),p_premio:g('#mPre'),p_dono:g('#mDon'),p_status:g('#mSt'),
-      p_comissao_pct:g('#mCp')===''?0:Number(g('#mCp')),p_comissao_fixa:g('#mCf')===''?0:Number(g('#mCf')),p_custo_premio:m.custo_premio??null,p_capacidade:g('#mCap')===''?null:Number(g('#mCap'))});
+      p_comissao_pct:g('#mCp')===''?0:Number(g('#mCp')),p_comissao_fixa:g('#mCf')===''?0:Number(g('#mCf')),p_custo_premio:m.custo_premio??null,p_capacidade:g('#mCap')===''?null:Number(g('#mCap'))};
+    let d=await rpc('mvt_admin_maquina',{...corpo,p_marca:g('#mMarca')});if(d.erro&&/function|find|p_marca/i.test(d.erro))d=await rpc('mvt_admin_maquina',corpo);  // banco sem a marca ainda: salva sem ela
     if(d.erro){w.querySelector('#mMsg').textContent=d.erro;return}
     const itens=[...box.querySelectorAll('.lin')].map(l=>({produto_id:l.querySelector('.iP').value,qtd:Number(l.querySelector('.iQ').value)||1})).filter(i=>i.produto_id);
     const r2=await rpc('mvt_admin_itens',{p_sessao:S(),p_codigo:g('#mCod').trim().toUpperCase(),p_itens:itens});if(r2.erro){w.querySelector('#mMsg').textContent=r2.erro;return}
