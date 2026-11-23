@@ -43,6 +43,8 @@ function custoPremio(m){if(m.itens&&m.itens.length){if(m.itens.some(i=>i.custo==
   if(m.custo_premio!=null)return num(m.custo_premio);const c=D.estoque&&D.estoque.custos;return c&&m.premio&&c[m.premio]!=null?num(c[m.premio]):null}
 const semPremio=m=>!(m.itens&&m.itens.length)&&(!m.premio||/sem pr/i.test(m.premio));
 const descItens=m=>(m.itens||[]).map(i=>`${String(num(i.qtd)).replace('.',',')}× ${esc(i.nome)}${i.custo!=null&&D.pode.dinheiro?' ('+brl(i.custo)+')':''}`).join(' + ');
+// Taxas da maquininha (tabela do Lucas, 23/11/2026): débito 0,99% · crédito à vista 2,99%. Pix sem taxa [VALIDAR].
+const TAXA={debito:0.0099,credito:0.0299,pix:0};
 function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l=leit(m,mes),cont=dinheiroContado(m,mes);
   const ps=premiosSaidos(m,mes),cp=custoPremio(m),lm=lancMes(mes,m.codigo);
   const lancPremio=lm.filter(x=>x.tipo==='saida'&&x.categoria===CAT_PREMIO).reduce((s,x)=>s+num(x.valor),0);
@@ -50,9 +52,11 @@ function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l
   const pagaCom=lm.filter(x=>x.tipo==='saida'&&x.categoria===CAT_COM).reduce((s,x)=>s+num(x.valor),0);
   const devida=rec*num(m.comissao_pct)/100+num(m.comissao_fixa),com=pagaCom>0?pagaCom:devida;
   const outras=lm.filter(x=>x.tipo==='saida'&&x.categoria!==CAT_COM&&x.categoria!==CAT_PREMIO).reduce((s,x)=>s+num(x.valor),0);
+  const taxaLanc=lm.some(x=>x.tipo==='saida'&&x.categoria==='Taxas de pagamento');
+  const taxa=taxaLanc||!l?0:Math.round((num(l.debito)*TAXA.debito+num(l.credito)*TAXA.credito+num(l.pix)*TAXA.pix)*100)/100;
   const ent=lm.filter(x=>x.tipo==='entrada').reduce((s,x)=>s+num(x.valor),0);
-  return {rec,eletr:l?num(l.faturamento)-num(l.dinheiro):0,dinTel:l?num(l.dinheiro):null,dinCont:cont,ps,cp,custoP,devida,pagaCom,com,outras,ent,
-    lucro:rec-(custoP||0)-com-outras+ent,semCusto:custoP===null,semComissao:!num(m.comissao_pct)&&!num(m.comissao_fixa)&&!pagaCom}}
+  return {rec,eletr:l?num(l.faturamento)-num(l.dinheiro):0,dinTel:l?num(l.dinheiro):null,dinCont:cont,ps,cp,custoP,devida,pagaCom,com,outras,ent,taxa,
+    lucro:rec-(custoP||0)-com-outras-taxa+ent,semCusto:custoP===null,semComissao:!num(m.comissao_pct)&&!num(m.comissao_fixa)&&!pagaCom}}
 function lucroRede(mes){let t=0,rec=0,falta=0;D.maquinas.forEach(m=>{const x=lucro(m,mes);if(x){t+=x.lucro;rec+=x.rec;if(x.semCusto)falta++}});
   const ger=lancMes(mes).filter(l=>!l.codigo);t+=ger.filter(l=>l.tipo==='entrada').reduce((s,l)=>s+num(l.valor),0)-ger.filter(l=>l.tipo==='saida').reduce((s,l)=>s+num(l.valor),0);
   return {lucro:t,rec,falta}}
@@ -237,6 +241,7 @@ function linhasLucro(x){const L=(t,v,cl,sub)=>`<tr><td>${t}${sub?`<small>${sub}<
   ${L('<b>Receita</b>','<b>'+brl(x.rec)+'</b>')}
   ${L('− Prêmios que saíram (produtos)',x.custoP===null?'<span class="st y">falta custo</span>':brl(x.custoP),'color:var(--rt)',x.ps?`${x.ps.qtd} un. (${x.ps.fonte})${x.cp!==null?' × '+brl(x.cp):''}`:'sem contagem de prêmios')}
   ${L('− Comissão / aluguel do ponto',brl(x.com),'color:var(--rt)',x.pagaCom?`paga (devida pelo combinado: ${brl(x.devida)})`:x.devida?'devida pelo combinado (ainda não lançada como paga)':'comissão não cadastrada')}
+  ${x.taxa?L('− Taxa da maquininha',brl(x.taxa),'color:var(--rt)','débito 0,99% · crédito 2,99% sobre o que entrou no cartão'):''}
   ${x.outras?L('− Outras despesas da máquina',brl(x.outras),'color:var(--rt)'):''}${x.ent?L('+ Outras entradas',brl(x.ent),'color:var(--vd)'):''}
   ${L('<b>Lucro da máquina</b>','<b>'+brl(x.lucro)+'</b>',x.lucro>=0?'color:var(--vd)':'color:var(--rt)')}</table>`}
 function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrada no seu acesso. <a href="#maquinas">Voltar</a>');return}
