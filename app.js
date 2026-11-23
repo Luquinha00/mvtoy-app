@@ -45,18 +45,27 @@ const semPremio=m=>!(m.itens&&m.itens.length)&&(!m.premio||/sem pr/i.test(m.prem
 const descItens=m=>(m.itens||[]).map(i=>`${String(num(i.qtd)).replace('.',',')}× ${esc(i.nome)}${i.custo!=null&&D.pode.dinheiro?' ('+brl(i.custo)+')':''}`).join(' + ');
 // Taxas da maquininha (tabela do Lucas, 23/11/2026): débito 0,99% · crédito à vista 2,99%. Pix sem taxa [VALIDAR].
 const TAXA={debito:0.0099,credito:0.0299,pix:0};
+// Custos do local (ex.: internet do KM 58) divididos entre as máquinas ativas daquele ponto no mês
+const fimMes=mes=>{const d=new Date(mes+'T12:00:00');d.setMonth(d.getMonth()+1);d.setDate(0);return d.toISOString().slice(0,10)};
+const doLocal=(m,pre)=>String(m.ponto||'').toLowerCase().startsWith(String(pre||'').toLowerCase());
+function custoLocal(m,mes){let t=0;const det=[];
+  (D.custos_local||[]).forEach(c=>{if(String(c.desde)>fimMes(mes)||(c.ate&&String(c.ate)<mes)||!doLocal(m,c.prefixo))return;
+    const n=D.maquinas.filter(x=>doLocal(x,c.prefixo)&&x.status!=='Em estoque').length||1;const v=num(c.valor)/n;t+=v;det.push(c.nome+' ÷ '+n)});
+  return {v:Math.round(t*100)/100,det:det.join(' · ')}}
+const saidaMes=(m,mes)=>(m.saidas||[]).find(x=>String(x.mes).slice(0,10)===mes);
 function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l=leit(m,mes),cont=dinheiroContado(m,mes);
-  const ps=premiosSaidos(m,mes),cp=custoPremio(m),lm=lancMes(mes,m.codigo);
+  const sm=saidaMes(m,mes);const ps=sm&&num(sm.qtd)>0?{qtd:num(sm.qtd),fonte:'contagem por produto'}:premiosSaidos(m,mes),cp=custoPremio(m),lm=lancMes(mes,m.codigo);
   const lancPremio=lm.filter(x=>x.tipo==='saida'&&x.categoria===CAT_PREMIO).reduce((s,x)=>s+num(x.valor),0);
-  let custoP=semPremio(m)?0:(ps&&cp!==null?ps.qtd*cp:(lancPremio||null));
+  let custoP=sm&&num(sm.qtd)>0?(sm.sem_custo?null:num(sm.custo)):semPremio(m)?0:(ps&&cp!==null?ps.qtd*cp:(lancPremio||null));
   const pagaCom=lm.filter(x=>x.tipo==='saida'&&x.categoria===CAT_COM).reduce((s,x)=>s+num(x.valor),0);
   const devida=rec*num(m.comissao_pct)/100+num(m.comissao_fixa),com=pagaCom>0?pagaCom:devida;
   const outras=lm.filter(x=>x.tipo==='saida'&&x.categoria!==CAT_COM&&x.categoria!==CAT_PREMIO).reduce((s,x)=>s+num(x.valor),0);
   const taxaLanc=lm.some(x=>x.tipo==='saida'&&x.categoria==='Taxas de pagamento');
+  const loc=custoLocal(m,mes);
   const taxa=taxaLanc||!l?0:Math.round((num(l.debito)*TAXA.debito+num(l.credito)*TAXA.credito+num(l.pix)*TAXA.pix)*100)/100;
   const ent=lm.filter(x=>x.tipo==='entrada').reduce((s,x)=>s+num(x.valor),0);
-  return {rec,eletr:l?num(l.faturamento)-num(l.dinheiro):0,dinTel:l?num(l.dinheiro):null,dinCont:cont,ps,cp,custoP,devida,pagaCom,com,outras,ent,taxa,
-    lucro:rec-(custoP||0)-com-outras-taxa+ent,semCusto:custoP===null,semComissao:!num(m.comissao_pct)&&!num(m.comissao_fixa)&&!pagaCom}}
+  return {rec,eletr:l?num(l.faturamento)-num(l.dinheiro):0,dinTel:l?num(l.dinheiro):null,dinCont:cont,ps,cp,custoP,devida,pagaCom,com,outras,ent,taxa,local:loc.v,localDet:loc.det,
+    lucro:rec-(custoP||0)-com-outras-taxa-loc.v+ent,semCusto:custoP===null,semComissao:!num(m.comissao_pct)&&!num(m.comissao_fixa)&&!pagaCom}}
 function lucroRede(mes){let t=0,rec=0,falta=0;D.maquinas.forEach(m=>{const x=lucro(m,mes);if(x){t+=x.lucro;rec+=x.rec;if(x.semCusto)falta++}});
   const ger=lancMes(mes).filter(l=>!l.codigo);t+=ger.filter(l=>l.tipo==='entrada').reduce((s,l)=>s+num(l.valor),0)-ger.filter(l=>l.tipo==='saida').reduce((s,l)=>s+num(l.valor),0);
   return {lucro:t,rec,falta}}
@@ -242,6 +251,7 @@ function linhasLucro(x){const L=(t,v,cl,sub)=>`<tr><td>${t}${sub?`<small>${sub}<
   ${L('− Prêmios que saíram (produtos)',x.custoP===null?'<span class="st y">falta custo</span>':brl(x.custoP),'color:var(--rt)',x.ps?`${x.ps.qtd} un. (${x.ps.fonte})${x.cp!==null?' × '+brl(x.cp):''}`:'sem contagem de prêmios')}
   ${L('− Comissão / aluguel do ponto',brl(x.com),'color:var(--rt)',x.pagaCom?`paga (devida pelo combinado: ${brl(x.devida)})`:x.devida?'devida pelo combinado (ainda não lançada como paga)':'comissão não cadastrada')}
   ${x.taxa?L('− Taxa da maquininha',brl(x.taxa),'color:var(--rt)','débito 0,99% · crédito 2,99% sobre o que entrou no cartão'):''}
+  ${x.local?L('− Custos do local (rateio)',brl(x.local),'color:var(--rt)',esc(x.localDet)):''}
   ${x.outras?L('− Outras despesas da máquina',brl(x.outras),'color:var(--rt)'):''}${x.ent?L('+ Outras entradas',brl(x.ent),'color:var(--vd)'):''}
   ${L('<b>Lucro da máquina</b>','<b>'+brl(x.lucro)+'</b>',x.lucro>=0?'color:var(--vd)':'color:var(--rt)')}</table>`}
 function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrada no seu acesso. <a href="#maquinas">Voltar</a>');return}
@@ -255,6 +265,10 @@ function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrad
    ${!semPremio(m)?`<span>Na máquina: ${est?est.qtd+' pelúcias'+(m.capacidade?' de '+m.capacidade:'')+' (contagem '+dataBR(est.data)+')':'sem contagem'}</span>`:''}</div></div>
    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${D.pode.visitar?`<button class="btn" data-visita="${m.codigo}">Registrar visita</button>`:''}
    ${D.pode.lancar?`<button class="btn s" id="lancM">Lançar valor</button>`:''}${D.pode.editar?`<button class="btn s" id="editM">Editar</button>`:''}</div></div></div>`;
+  if((m.dentro||[]).length){const tq=m.dentro.reduce((s,i)=>s+num(i.qtd),0),tv=m.dentro.reduce((s,i)=>s+num(i.qtd)*num(i.custo),0);
+    h+=`<div class="card"><h2>Dentro da máquina <span class="sub">${tq} itens${din?' · '+brl(tv)+' a custo':''} · contagem de ${dataBR(m.dentro[0].data)}</span></h2><table><tr><th>Produto</th><th class="r">Qtd</th>${din?'<th class="r">Custo</th><th class="r">Total</th>':''}</tr>
+     ${m.dentro.map(i=>`<tr><td>${esc(i.nome)}</td><td class="r">${num(i.qtd)}</td>${din?`<td class="r">${i.custo!=null?brl(i.custo):'<span class="st y">falta</span>'}</td><td class="r">${i.custo!=null?brl(num(i.qtd)*num(i.custo)):'—'}</td>`:''}</tr>`).join('')}</table>
+     <p class="mini" style="margin-top:6px">Atualiza a cada visita com a contagem por produto (o que encontrou + o que repôs).</p></div>`}
   if(din){const x=lucro(m,MES),l=leit(m,MES),md=media3(m,MES);
     h+=seletorMes()+`<div class="kpis"><div class="kpi"><div class="l">Receita ${nomeMes(MES)}</div><div class="v">${x?brl(x.rec):'—'}</div><div class="s">${MES===mesAtual()?'parcial':md?'média 3 meses: '+brl0(md):'—'}</div></div>
      <div class="kpi"><div class="l">Prêmios que saíram</div><div class="v">${x&&x.ps?x.ps.qtd:semPremio(m)?'—':'?'}</div><div class="s">${x&&x.ps?x.ps.fonte:semPremio(m)?'máquina sem prêmio':'registre a contagem na visita'}</div></div>
@@ -294,6 +308,8 @@ function telaFinanceiro(){const c=contas(MES);const lm=lancMes(MES);const LR=luc
    <div class="kpi"><div class="l">Recebido em dinheiro</div><div class="v">${brl(dinRec)}</div><div class="s">${nCont?nCont+' máq. pela contagem, demais pela telemetria':'pela telemetria (sem contagem no mês)'}</div></div>
    <div class="kpi r"><div class="l">Comissões dos pontos</div><div class="v">${brl(comPaga||comDev)}</div><div class="s">${comPaga?'pagas · devidas '+brl(comDev):'devidas pelo combinado'}${semCom?' · '+semCom+' sem comissão cadastrada':''}</div></div>
    <div class="kpi ${LR.lucro>=0?'g':'r'}"><div class="l">Lucro estimado</div><div class="v">${brl(LR.lucro)}</div><div class="s">${LR.falta?LR.falta+' máquina(s) sem custo de pelúcia':LR.rec?Math.round(LR.lucro/LR.rec*100)+'% da receita':''}</div></div></div>`;
+  if(D.pode.editar){const cl=D.custos_local||[];
+    h+=`<div class="card"><h2>Custos do local <span class="sub">divididos entre as máquinas do ponto</span><button class="btn acao" data-cloc="">+ Custo</button></h2>${cl.length?`<table><tr><th>Custo</th><th>Máquinas cujo ponto começa com</th><th class="r">R$/mês</th><th class="r">Desde</th></tr>${cl.map(c=>`<tr class="clic" data-cloc="${c.id}"><td>${esc(c.nome)}<small>${esc(c.categoria)}</small></td><td>${esc(c.prefixo)}<small>${D.maquinas.filter(m=>doLocal(m,c.prefixo)&&m.status!=='Em estoque').length} máquina(s)</small></td><td class="r">${brl(c.valor)}</td><td class="r">${dataBR(c.desde)}${c.ate?'<small>até '+dataBR(c.ate)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhum custo de local cadastrado.</p>'}</div>`}
   h+=`<div class="grid2"><div class="card"><h2>Dinheiro: telemetria × contagem</h2>${nCont?`<table><tr><td>Telemetria (máquinas contadas)</td><td class="r">${brl(dTel)}</td></tr><tr><td>Contado no cofre</td><td class="r">${brl(dCont)}</td></tr>
      <tr><td><b>Diferença</b></td><td class="r"><b style="color:${dCont-dTel>=0?'var(--vd)':'var(--rt)'}">${dCont-dTel>=0?'+':''}${brl(dCont-dTel)}</b></td></tr></table>
      <p class="mini" style="margin-top:6px">Vale o contado. A telemetria do dinheiro (${brl(dTelTot)} no mês) só é usada nas máquinas ainda sem contagem — os dois nunca somam.</p>`
@@ -348,8 +364,12 @@ function formVisita(cod){
    <div><label>Máquina</label><select id="vMaq" required>${optMaq(cod,'Escolha a máquina')}</select></div>
    <div><label>Data</label><input id="vData" type="date" value="${hojeISO()}" max="${hojeISO()}" required></div>
    <p class="mini" id="vInfo"></p>
-   <div class="lin"><div><label>Prêmios que estavam na máquina (contagem)</label><input id="vVis" type="number" min="0" inputmode="numeric"></div>
+   <div id="vTot" class="lin"><div><label>Prêmios que estavam na máquina (contagem)</label><input id="vVis" type="number" min="0" inputmode="numeric"></div>
    <div><label>Prêmios que você colocou</label><input id="vRep" type="number" min="0" inputmode="numeric"></div></div>
+   <div><label>Por produto (recomendado) <span class="mini">o que encontrou dentro e o que colocou, de cada tipo</span></label>
+   <div class="lin" style="grid-template-columns:1fr 80px 80px 30px;font-size:12px;color:var(--sub)"><span>Produto</span><span>Encontrei</span><span>Coloquei</span><span></span></div>
+   <div id="vItens" class="form" style="gap:6px"></div><button type="button" class="lnk" id="vAddItem">+ outro produto</button>
+   <p class="mini">Ex.: embaixo tradicional, em cima licenciada: lance as duas linhas. Assim o app sabe o custo exato do que está dentro e do que saiu.</p></div>
    <div><label>Dinheiro contado no cofre (R$)</label><input id="vRec" type="number" min="0" step="0.01" inputmode="decimal" placeholder="deixe vazio se não abriu o cofre"></div>
    <label class="chk"><input type="checkbox" id="vLim"> Fiz a limpeza da máquina</label>
    <div><label>Problema encontrado (se houver)</label><textarea id="vPro" rows="2" placeholder="Ex.: garra fraca, noteiro travado, luz apagada"></textarea></div>
@@ -358,10 +378,23 @@ function formVisita(cod){
    const info=()=>{const m=maq(w.querySelector('#vMaq').value);if(!m){w.querySelector('#vInfo').textContent='';return}const e=estoqueMaq(m);
      const nomes=(m.itens||[]).map(i=>i.nome);const meu=((D.estoque||{}).pessoas||[]).filter(x=>x.pessoa_id===D.eu.id&&nomes.includes(x.produto)).map(x=>num(x.qtd)+' '+x.produto).join(', ');
      w.querySelector('#vInfo').textContent=semPremio(m)?'Máquina sem prêmio: só informe o dinheiro e o que encontrou.':`Cada prêmio: ${(m.itens||[]).map(i=>num(i.qtd)+'× '+i.nome).join(' + ')||m.premio}. ${e?'Última contagem: '+e.qtd+' na máquina ('+dataBR(e.data)+').':'Ainda sem contagem nesta máquina.'}${meu?' Com você: '+meu+'.':''}`};
-   w.querySelector('#vMaq').onchange=info;info();
+   const box=w.querySelector('#vItens');
+   const linha=(pid)=>{const d=document.createElement('div');d.className='lin';d.style.gridTemplateColumns='1fr 80px 80px 30px';
+     d.innerHTML=`<select class="iP"><option value="">— produto —</option>${produtos().map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.nome)}</option>`).join('')}</select><input class="iE" type="number" min="0" inputmode="numeric" placeholder="0"><input class="iR" type="number" min="0" inputmode="numeric" placeholder="0"><button type="button" class="lnk" title="remover">×</button>`;
+     d.querySelector('button').onclick=()=>{d.remove();soma()};d.querySelectorAll('input').forEach(i=>i.oninput=soma);box.appendChild(d)};
+   const soma=()=>{const ls=[...box.querySelectorAll('.lin')].filter(l=>l.querySelector('.iP').value);const tem=ls.some(l=>l.querySelector('.iE').value!==''||l.querySelector('.iR').value!=='');
+     w.querySelector('#vTot').style.opacity=tem?.5:1;if(tem){w.querySelector('#vVis').value=ls.reduce((s,l)=>s+num(l.querySelector('.iE').value),0);w.querySelector('#vRep').value=ls.reduce((s,l)=>s+num(l.querySelector('.iR').value),0)}};
+   const prefill=()=>{box.innerHTML='';const m=maq(w.querySelector('#vMaq').value);if(!m||semPremio(m))return;
+     const ids=[...new Set([...(m.dentro||[]).map(i=>i.produto_id),...(m.itens||[]).map(i=>i.produto_id)])];(ids.length?ids:['']).forEach(linha)};
+   w.querySelector('#vAddItem').onclick=()=>linha('');
+   w.querySelector('#vMaq').onchange=()=>{info();prefill()};info();prefill();
    w.querySelector('#fv').onsubmit=async e=>{e.preventDefault();const g=id=>w.querySelector(id),n=id=>g(id).value===''?null:Number(g(id).value);
     g('#vMsg').textContent='Salvando…';
-    const d=await rpc('mvt_salvar_visita',{p_sessao:S(),p_codigo:g('#vMaq').value,p_data:g('#vData').value,p_repostos:n('#vRep'),p_visor:n('#vVis'),
+    const itens=[...box.querySelectorAll('.lin')].map(l=>({produto_id:l.querySelector('.iP').value,encontrei:Number(l.querySelector('.iE').value||0),repus:Number(l.querySelector('.iR').value||0)}))
+      .filter(i=>i.produto_id&&(i.encontrei||i.repus));
+    const d=itens.length?await rpc('mvt_salvar_visita_itens',{p_sessao:S(),p_codigo:g('#vMaq').value,p_data:g('#vData').value,p_recolhido:n('#vRec'),
+        p_limpeza:g('#vLim').checked,p_problema:g('#vPro').value,p_parada:g('#vPar').checked,p_itens:itens})
+      :await rpc('mvt_salvar_visita',{p_sessao:S(),p_codigo:g('#vMaq').value,p_data:g('#vData').value,p_repostos:n('#vRep'),p_visor:n('#vVis'),
       p_recolhido:n('#vRec'),p_limpeza:g('#vLim').checked,p_problema:g('#vPro').value,p_parada:g('#vPar').checked});
     if(d.erro){g('#vMsg').textContent=d.erro;return}w.remove();carregar(true)}})}
 function formLanc(l,cod){const novo=!l;l=l||{tipo:'saida',codigo:cod||'',data:hojeISO(),competencia:MES,status:'pago'};
@@ -424,10 +457,16 @@ function telaEstoque(){const E=D.estoque||{deposito:[],pessoas:[],movimentos:[]}
   const naMaq=D.maquinas.filter(m=>!semPremio(m)).map(m=>({m,e:estoqueMaq(m)}));
   const totDep=E.deposito.reduce((s,x)=>s+num(x.qtd),0),totPes=E.pessoas.reduce((s,x)=>s+num(x.qtd),0),totMaq=naMaq.reduce((s,o)=>s+(o.e?o.e.qtd:0),0);
   const valor=E.deposito.reduce((s,x)=>s+num(x.qtd)*num(x.custo_medio),0);
+  const cst=(E.custos||{}),valPes=E.pessoas.reduce((s,x)=>s+Math.max(0,num(x.qtd))*num(cst[x.produto]),0);
+  const valMaq=D.maquinas.reduce((s,m)=>s+(m.dentro||[]).reduce((t,i)=>t+num(i.qtd)*num(i.custo),0),0);
+  const porLocal={};D.maquinas.forEach(m=>{const v=(m.dentro||[]).reduce((t,i)=>t+num(i.qtd)*num(i.custo),0),q=(m.dentro||[]).reduce((t,i)=>t+num(i.qtd),0);
+    if(!q)return;const k=String(m.ponto||'—').split(' — ')[0];porLocal[k]=porLocal[k]||{q:0,v:0};porLocal[k].q+=q;porLocal[k].v+=v});
   let h=`<div class="kpis"><div class="kpi"><div class="l">No depósito</div><div class="v">${totDep}</div><div class="s">${valor?'≈ '+brl(valor)+' a custo':'pelúcias'}</div></div>
    <div class="kpi"><div class="l">Com reabastecedores</div><div class="v">${totPes}</div><div class="s">itens</div></div>
    <div class="kpi"><div class="l">Nas máquinas</div><div class="v">${totMaq}</div><div class="s">pela última contagem</div></div>
-   <div class="kpi"><div class="l">Total</div><div class="v">${totDep+totPes+totMaq}</div><div class="s">itens na rede</div></div></div>
+   <div class="kpi"><div class="l">Total</div><div class="v">${totDep+totPes+totMaq}</div><div class="s">itens na rede</div></div>
+   <div class="kpi g"><div class="l">Valor em produtos</div><div class="v">${brl(valor+valPes+valMaq)}</div><div class="s">a custo: depósito ${brl0(valor)} · pessoas ${brl0(valPes)} · máquinas ${brl0(valMaq)}</div></div></div>
+   ${Object.keys(porLocal).length?`<div class="card"><h2>Produtos por local <span class="sub">pela última contagem por produto</span></h2><table><tr><th>Local</th><th class="r">Itens</th><th class="r">Valor a custo</th></tr>${Object.entries(porLocal).sort((a,b)=>b[1].v-a[1].v).map(([k,o])=>`<tr><td>${esc(k)}</td><td class="r">${o.q}</td><td class="r">${brl(o.v)}</td></tr>`).join('')}</table></div>`:''}
    <div class="card"><h2>Movimentar<span class="acao" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-mov="compra">+ Compra</button><button class="btn s" data-mov="entrega">Entregar ao reabastecedor</button><button class="btn s" data-mov="devolucao">Devolução</button><button class="btn s" data-mov="ajuste_deposito">Ajuste</button></span></h2>
    <p class="sub">Compra entra no depósito com o custo de cada pelúcia (vira o custo médio usado no lucro). Entrega passa do depósito para o reabastecedor; o que ele coloca nas máquinas sai dele pelas visitas.</p></div>
    <div class="card"><h2>Produtos e insumos<button class="btn s acao" id="novoProd">+ Novo produto</button></h2>
@@ -441,6 +480,17 @@ function telaEstoque(){const E=D.estoque||{deposito:[],pessoas:[],movimentos:[]}
    <td class="r">${e?e.qtd+(m.capacidade?`<small>de ${m.capacidade}</small>`:''):'<span class="st y">sem contagem</span>'}</td><td class="r cj">${e?dataBR(e.data):'—'}</td></tr>`).join('')}</table></div></div>
    <div class="card"><h2>Últimas movimentações</h2>${E.movimentos.length?`<div class="wrap"><table><tr><th>Data</th><th>Movimento</th><th class="r">Qtd</th><th></th></tr>${E.movimentos.map(x=>`<tr><td>${dataBR(x.data)}</td><td>${TIPOS_MOV[x.tipo]||x.tipo} · ${esc(x.produto)}<small>${[x.pessoa?esc(x.pessoa):'',x.custo_unit!=null?brl(x.custo_unit)+' cada':'',esc(x.obs||'')].filter(Boolean).join(' · ')}</small></td><td class="r">${x.qtd}</td><td class="r"><button class="lnk" data-dmov="${x.id}">apagar</button></td></tr>`).join('')}</table></div>`:'<p class="sub">Nenhuma movimentação.</p>'}</div>`;
   $('#app').innerHTML=h;$('#novoProd').onclick=()=>formProduto(null)}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-cloc]');if(b)formCustoLocal((D.custos_local||[]).find(c=>c.id===b.dataset.cloc))});
+function formCustoLocal(c){const novo=!c;c=c||{nome:'',prefixo:'',categoria:'Telemetria e internet',valor:'',desde:mesAtual(),ate:null};
+  modal(`<h3>${novo?'Novo custo do local':'Editar custo do local'}</h3><form class="form" id="fcl">
+   <div><label>Nome</label><input id="cN" required value="${esc(c.nome)}" placeholder="Internet Lago Azul KM 58"></div>
+   <div><label>Máquinas cujo ponto começa com</label><input id="cP" required value="${esc(c.prefixo)}" placeholder="Lago Azul KM 58"></div>
+   <div class="lin"><div><label>Categoria</label><select id="cC">${CAT_SAIDA.map(k=>`<option ${k===c.categoria?'selected':''}>${k}</option>`).join('')}</select></div><div><label>Valor por mês (R$)</label><input id="cV" type="number" step="0.01" min="0" required value="${c.valor}"></div></div>
+   <div class="lin"><div><label>Desde</label><input id="cD" type="date" required value="${String(c.desde).slice(0,10)}"></div><div><label>Até (se parou)</label><input id="cA" type="date" value="${c.ate?String(c.ate).slice(0,10):''}"></div></div>
+   <div class="msg" id="cMsg"></div><div class="bts">${novo?'':'<button type="button" class="btn s" id="cDel">Apagar</button>'}<button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar</button></div></form>`,w=>{
+   const g=id=>w.querySelector(id).value;const env=async ap=>{const d=await rpc('mvt_admin_custo_local',{p_sessao:S(),p_id:novo?null:c.id,p_nome:g('#cN'),p_prefixo:g('#cP'),p_categoria:g('#cC'),
+     p_valor:Number(g('#cV')),p_desde:g('#cD'),p_ate:g('#cA')||null,p_apagar:ap});if(d.erro){w.querySelector('#cMsg').textContent=d.erro;return}w.remove();carregar(true)};
+   w.querySelector('#fcl').onsubmit=e=>{e.preventDefault();env(false)};if(!novo)w.querySelector('#cDel').onclick=()=>{if(confirm('Apagar este custo?'))env(true)}})}
 document.addEventListener('click',e=>{const tr=e.target.closest('tr[data-prod]');if(tr)formProduto(((D.estoque||{}).produtos||[]).find(p=>p.id===tr.dataset.prod))});
 const CATS_PROD=['Pelúcia','Embalagem','Conteúdo de caixa','Carta colecionável','Capinha','Insumo','Outros'];
 function formProduto(p){const novo=!p;p=p||{nome:'',categoria:'Pelúcia',unidade:'un',custo:null,ativo:true,obs:''};
