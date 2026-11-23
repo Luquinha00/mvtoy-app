@@ -1,6 +1,6 @@
--- 23/11/2026 · Telemetria MV Toy em DUAS linhas:
---   pulso = máquinas de pulso (garra, soco, basquete, fliperama): placas TMV-0001…
---   mdb   = vending machines (protocolo MDB): placas TMD-0001…
+-- 23/11/2026 · Telemetria MV Toy em DUAS linhas de placa:
+--   Touch Pulse   (tipo 'pulso') = máquinas de pulso (garra, soco, basquete, fliperama, simulador): placas TMV-0001…
+--   Touch Vending (tipo 'mdb')   = vending machines (protocolo MDB): placas TMD-0001…
 -- Vendas MDB entram em mvt_tel_eventos com tipo 'venda' (item = seleção da máquina, valor = preço).
 
 alter table public.mvt_tel_placas add column if not exists tipo text not null default 'pulso';
@@ -10,6 +10,7 @@ do $$ begin
   end if;
 end $$;
 alter table public.mvt_tel_eventos add column if not exists item text;   -- MDB: número da seleção (ex.: 12)
+alter table public.mvt_tel_eventos add column if not exists meio text;   -- MDB: cartao | dinheiro (quando a placa souber)
 
 -- gerar placa nova: agora escolhe a linha (padrão pulso, como antes)
 drop function if exists public.mvt_admin_nova_placa(uuid, uuid, numeric, numeric);

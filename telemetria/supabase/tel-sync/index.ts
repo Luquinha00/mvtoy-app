@@ -1,4 +1,5 @@
-// tel-sync v4 — conversa da Telemetria MV Toy com o servidor (protocolo 2 · 23/11/2026: moedas, notas e prêmios).
+// tel-sync v5 — conversa da Telemetria MV Toy com o servidor (protocolo 2 · 23/11/2026).
+// Duas linhas de placa: Touch Pulse (tipo 'pulso': moedas, notas, prêmios, créditos) e Touch Vending (tipo 'mdb': vendas MDB).
 // A placa gera o pacote assinado; quem leva até aqui é a maquininha (Bluetooth → internet dela) ou a própria placa (Wi-Fi, piloto).
 // Envia: moedas lidas (por lote), créditos executados, sinal. Recebe: créditos pendentes e a configuração.
 // Segurança: a placa assina o pedido (x-placa, x-ts, x-sig = HMAC-SHA256(segredo, ts.corpo)).
@@ -48,7 +49,8 @@ Deno.serve(async (req) => {
   const agoraS = Math.floor(Date.now() / 1000);
   if (Math.abs(agoraS - ts) > 600) return resp(401, { erro: "relogio", agora: agoraS });
 
-  let b: { p?: number; via?: string; fw?: string; rssi?: number; lote?: number; moedas?: number; notas?: number; premios?: number; feitos?: string[]; boot?: boolean };
+  let b: { p?: number; via?: string; fw?: string; rssi?: number; lote?: number; moedas?: number; notas?: number; premios?: number; feitos?: string[]; boot?: boolean;
+    vendas?: { i?: number; v?: number; m?: string }[] };
   try { b = JSON.parse(corpo); } catch { return resp(400, { erro: "json" }); }
   const via = b.via === "wifi" ? "wifi" : "ble";
   const lote = Math.max(0, Math.floor(Number(b.lote || 0)));
@@ -60,8 +62,13 @@ Deno.serve(async (req) => {
   // moedas (COINA), notas (COINB) e prêmios (sensor de saída) do lote: atualização condicional (pedidos iguais juntos contam 1 vez só)
   const lim = (v: unknown) => Math.max(0, Math.min(500, Math.floor(Number(v || 0))));
   const moedas = lim(b.moedas), notas = lim(b.notas), premios = lim(b.premios);
+  // Touch Vending: vendas do lote (item = seleção da máquina, v = preço em R$, m = meio: cartao | dinheiro | ?)
+  const MEIOS = ["cartao", "dinheiro"];
+  const vendas = placa.tipo === "mdb" ? (Array.isArray(b.vendas) ? b.vendas : []).slice(0, 50)
+    .map((x) => ({ i: Math.max(0, Math.min(65535, Math.floor(Number(x?.i ?? 0)))), v: Math.round(Number(x?.v ?? 0) * 100) / 100, m: MEIOS.includes(String(x?.m)) ? String(x?.m) : null }))
+    .filter((x) => x.v >= 0 && x.v <= 2000) : [];
   let atual = placa;
-  for (let tent = 0; tent < 3 && moedas + notas + premios > 0 && loteNovo(lote, atual.ultimo_lote); tent++) {
+  for (let tent = 0; tent < 3 && moedas + notas + premios + vendas.length > 0 && loteNovo(lote, atual.ultimo_lote); tent++) {
     let q = db.from("mvt_tel_placas")
       .update({ ultimo_lote: lote, pulsos_lidos_total: Number(atual.pulsos_lidos_total || 0) + moedas + notas })
       .eq("id", placaId).eq("pulsos_lidos_total", atual.pulsos_lidos_total ?? 0);
@@ -73,6 +80,7 @@ Deno.serve(async (req) => {
       if (moedas) ev.push({ placa_id: placaId, codigo: placa.codigo, tipo: "moeda", pulsos: moedas, valor: moedas * vp });
       if (notas) ev.push({ placa_id: placaId, codigo: placa.codigo, tipo: "nota", pulsos: notas, valor: notas * vp });
       if (premios) ev.push({ placa_id: placaId, codigo: placa.codigo, tipo: "premio", pulsos: premios, valor: 0 });
+      for (const x of vendas) ev.push({ placa_id: placaId, codigo: placa.codigo, tipo: "venda", pulsos: 1, valor: x.v, item: String(x.i), meio: x.m });
       if (ev.length) await db.from("mvt_tel_eventos").insert(ev);
       break;
     }

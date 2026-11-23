@@ -1,4 +1,6 @@
-# Telemetria MV Toy · linha MDB (vending machines) — especificação v0.1 (23/11/2026)
+# Touch Vending — Telemetria MV Toy para vending machines (MDB) — especificação v0.1 (23/11/2026)
+
+> Nome da linha: **Touch Vending** (placas TMD-). A linha irmã de pulso é a **Touch Pulse** (placas TMV-). Firmware v0.1: `telemetria/firmware/touch_vending`.
 
 A Telemetria MV Toy passa a ter **duas linhas** no mesmo app, servidor e banco:
 
