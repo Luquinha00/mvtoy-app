@@ -5,8 +5,11 @@
 #include "WiFi.h"
 uint64_t SIM_US = 1000000; std::map<std::string, std::string> SIM_NVS; SerialStub Serial; EspStub ESP; WiFiStub WiFi;
 std::function<int(const std::map<std::string,std::string>&, const std::string&, std::string&)> SIM_SERVIDOR;
-static void (*ISR)() = nullptr; static int pinoSaida = 0, creditosMaquina = 0;
-void attachInterrupt(int, void (*f)(), int) { ISR = f; }
+static std::map<int, void (*)()> ISRS; static void ISR_MOEDA() { if (ISRS[27]) ISRS[27](); }
+#define ISR (ISRS[27] ? ISR_MOEDA : nullptr)
+static int pinoSaida = 0, creditosMaquina = 0;
+void attachInterrupt(int pino, void (*f)(), int) { ISRS[pino] = f; }
+static void pulsoEm(int pino) { SIM_US += 120000; if (ISRS[pino]) ISRS[pino](); SIM_US += 60000; }
 void pinMode(int, int) {} int digitalRead(int) { return HIGH; }
 void sim_avanca_ms(unsigned long ms) { SIM_US += ms * 1000ULL; }
 void digitalWrite(int pino, int v) { if (pino == 26) { if (v == HIGH && pinoSaida == LOW) { creditosMaquina++; if (ISR) ISR(); } pinoSaida = v; } }
@@ -57,6 +60,9 @@ int main() {
   confere(SV.chamadas == ch, "sem Wi-Fi não tenta enviar");
   moedasPendentes = 0; moedasDoLote = 0; WiFi.st = 3; setup(); rodar(15000);
   confere(SV.moedas == 8, "as 2 moedas do período sem internet chegam (estavam na memória)");
+  printf("8) Noteiro e prêmio (piloto Wi-Fi)\n");
+  pulsoEm(25); pulsoEm(25); pulsoEm(33); rodar(12000);
+  confere(SV.notas == 2 && SV.premios == 1 && SV.moedas == 8, "2 pulsos de nota e 1 prêmio contados à parte");
   printf("\nResultado: %d de %d verificações OK\n", total - falhas, total);
   return falhas ? 1 : 0;
 }

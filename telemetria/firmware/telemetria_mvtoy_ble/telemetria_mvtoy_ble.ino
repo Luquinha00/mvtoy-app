@@ -1,5 +1,5 @@
 /*
-  Telemetria MV Toy · placa Bluetooth · v0.4 · 20/11/2026 (protocolo 2)
+  Telemetria MV Toy · placa Bluetooth · v0.5 · 23/11/2026 (protocolo 2 · moedas, notas e prêmios)
   Arquitetura v2 (regra do Lucas): a MAQUININHA é a central. A placa não tem Wi-Fi, botão nem configuração:
   ela só encaixa no chicote do moedeiro e conversa por Bluetooth (BLE) com o app MV Toy na maquininha.
   A maquininha leva os pacotes da placa até o servidor (Wi-Fi do ponto ou 4G dela) e traz as respostas.
@@ -40,8 +40,8 @@
 #define RESPOSTA_UUID "6d760003-4d56-4d56-a001-6d76706c6163"
 #define INFO_UUID     "6d760004-4d56-4d56-a001-6d76706c6163"
 
-const char* FIRMWARE = "0.4";
-const int PINO_MOEDA = 27, PINO_CREDITO = 26, PINO_LED = 2;
+const char* FIRMWARE = "0.5";
+const int PINO_MOEDA = 27, PINO_NOTA = 25, PINO_PREMIO = 33, PINO_CREDITO = 26, PINO_LED = 2;
 const uint32_t DEBOUNCE_US = 15000;
 const uint32_t AGRUPA_MS = 20000;      // junta as moedas de 20 s num envio só
 const uint32_t RENOVA_MS = 60000;      // pacote sempre "fresco" para leitura da maquininha
@@ -51,9 +51,9 @@ char PLACA_ID[16] = "";
 char PLACA_SEGREDO[65] = "";
 Preferences mem;
 
-volatile uint32_t moedasPendentes = 0, ultimoPulsoUs = 0;
+volatile uint32_t moedasPendentes = 0, ultimoPulsoUs = 0, notasPendentes = 0, ultimaNotaUs = 0, premiosPendentes = 0, ultimoPremioUs = 0;
 volatile bool emitindo = false;   // enquanto a placa solta crédito, o próprio pulso não conta como moeda
-uint32_t pulsoMs = 60, intervaloMs = 80, envioS = 300, loteAtual = 0, moedasDoLote = 0, pendSalvo = 0;
+uint32_t pulsoMs = 60, intervaloMs = 80, envioS = 300, loteAtual = 0, moedasDoLote = 0, notasDoLote = 0, premiosDoLote = 0, pendSalvo = 0;
 long deltaRelogio = 0, ultAgoraCredito = 0;
 bool primeiroEnvio = true, conectado = false;
 uint32_t conectouEm = 0, ultimaRespValida = 0, ultimoAviso = 0, ultimoMontado = 0, ultimoSalvaPend = 0;
@@ -66,6 +66,8 @@ BLECharacteristic *chPacote, *chResposta, *chInfo;
 String respostaPendente; volatile bool temResposta = false;
 
 void IRAM_ATTR aoPulsoMoeda() { if (emitindo) return; uint32_t a = micros(); if (a - ultimoPulsoUs > DEBOUNCE_US) { moedasPendentes++; ultimoPulsoUs = a; } }
+void IRAM_ATTR aoPulsoNota() { uint32_t a = micros(); if (a - ultimaNotaUs > DEBOUNCE_US) { notasPendentes++; ultimaNotaUs = a; } }       // COINB: noteiro / 2º moedeiro
+void IRAM_ATTR aoPulsoPremio() { uint32_t a = micros(); if (a - ultimoPremioUs > 50000) { premiosPendentes++; ultimoPremioUs = a; } }  // sensor de saída de prêmio (debounce 50 ms)
 
 String hmacHex(const String& msg) {
   byte out[32]; mbedtls_md_context_t ctx; mbedtls_md_init(&ctx);
@@ -77,7 +79,13 @@ String hmacHex(const String& msg) {
 }
 
 // moedas guardadas na memória: queda de energia (shopping fechando) não apaga moedas ainda não enviadas
-void salvarMoedas() { uint32_t p = moedasPendentes; mem.putUInt("pend", p); mem.putUInt("mlote", moedasDoLote); pendSalvo = p; }
+void salvarMoedas() {
+  uint32_t p = moedasPendentes, n = notasPendentes, q = premiosPendentes;
+  mem.putUInt("pend", p); mem.putUInt("mlote", moedasDoLote);
+  mem.putUInt("npend", n); mem.putUInt("nlote", notasDoLote);
+  mem.putUInt("ppend", q); mem.putUInt("plote", premiosDoLote);
+  pendSalvo = p + n + q;
+}
 
 bool jaFeito(const String& id) { for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i] == id) return true; return false; }
 bool temFeitoPendente() { for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i].length() && !feitoConfirmado[i]) return true; return false; }
@@ -95,12 +103,16 @@ void darCredito(int pulsos) {
 // monta o pacote assinado que a maquininha vai levar ao servidor; avisar = notifica a maquininha
 void montarPacote(bool avisar) {
   if (!strlen(PLACA_ID) || !strlen(PLACA_SEGREDO)) return;
-  if (moedasDoLote == 0) {
-    noInterrupts(); moedasDoLote = moedasPendentes; moedasPendentes = 0; interrupts();
-    if (moedasDoLote > 0) { loteAtual++; mem.putUInt("lote", loteAtual); salvarMoedas(); }
+  if (moedasDoLote == 0 && notasDoLote == 0 && premiosDoLote == 0) {
+    noInterrupts();
+    moedasDoLote = moedasPendentes; moedasPendentes = 0;
+    notasDoLote = notasPendentes; notasPendentes = 0;
+    premiosDoLote = premiosPendentes; premiosPendentes = 0;
+    interrupts();
+    if (moedasDoLote + notasDoLote + premiosDoLote > 0) { loteAtual++; mem.putUInt("lote", loteAtual); salvarMoedas(); }
   }
   JsonDocument c;
-  c["p"] = 2; c["via"] = "ble"; c["fw"] = FIRMWARE; c["lote"] = loteAtual; c["moedas"] = moedasDoLote; c["rssi"] = 0;
+  c["p"] = 2; c["via"] = "ble"; c["fw"] = FIRMWARE; c["lote"] = loteAtual; c["moedas"] = moedasDoLote; c["notas"] = notasDoLote; c["premios"] = premiosDoLote; c["rssi"] = 0;
   if (primeiroEnvio) c["boot"] = true;
   JsonArray arr = c["feitos"].to<JsonArray>(); int n = 0;
   for (int i = 0; i < MAX_FEITOS; i++) {
@@ -130,7 +142,7 @@ void tratarResposta(const String& txt) {
   if (confirmado) {   // (resposta falsa ou de um lote anterior não zera nada; créditos têm assinatura própria abaixo)
     ultimaRespValida = millis();
     deltaRelogio = agora - (long)(millis() / 1000);
-    moedasDoLote = 0; primeiroEnvio = false; salvarMoedas();
+    moedasDoLote = 0; notasDoLote = 0; premiosDoLote = 0; primeiroEnvio = false; salvarMoedas();
     for (int i = 0; i < MAX_FEITOS; i++) if (feitoNoPacote[i]) { feitoConfirmado[i] = true; feitoNoPacote[i] = false; }
     if (r["cfg"]["pulso_ms"].is<int>()) pulsoMs = constrain(r["cfg"]["pulso_ms"].as<int>(), 20, 300);
     if (r["cfg"]["intervalo_ms"].is<int>()) intervaloMs = constrain(r["cfg"]["intervalo_ms"].as<int>(), 20, 500);
@@ -173,10 +185,15 @@ void lerSerial() {   // gravação na bancada: "CFG TMV-0001 <segredo>"
 void setup() {
   Serial.begin(115200);
   pinMode(PINO_CREDITO, OUTPUT); digitalWrite(PINO_CREDITO, LOW); pinMode(PINO_LED, OUTPUT);
-  pinMode(PINO_MOEDA, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_MOEDA), aoPulsoMoeda, RISING);  // entrada por transistor: moeda = GPIO sobe
+  pinMode(PINO_MOEDA, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_MOEDA), aoPulsoMoeda, RISING);
+  pinMode(PINO_NOTA, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_NOTA), aoPulsoNota, RISING);
+  pinMode(PINO_PREMIO, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_PREMIO), aoPulsoPremio, RISING);  // entrada sem fio = nunca dispara (pull-up)  // entrada por transistor: moeda = GPIO sobe
   mem.begin("telmv", false);
   loteAtual = mem.getUInt("lote", 0); proxFeito = mem.getInt("prox", 0);
-  moedasDoLote = mem.getUInt("mlote", 0); moedasPendentes = mem.getUInt("pend", 0); pendSalvo = moedasPendentes;
+  moedasDoLote = mem.getUInt("mlote", 0); moedasPendentes = mem.getUInt("pend", 0);
+  notasDoLote = mem.getUInt("nlote", 0); notasPendentes = mem.getUInt("npend", 0);
+  premiosDoLote = mem.getUInt("plote", 0); premiosPendentes = mem.getUInt("ppend", 0);
+  pendSalvo = moedasPendentes + notasPendentes + premiosPendentes;
   ultAgoraCredito = (long)mem.getUInt("uagora", 0);
   for (int i = 0; i < MAX_FEITOS; i++) { feitos[i] = mem.getString(("f" + String(i)).c_str(), ""); feitoConfirmado[i] = false; feitoNoPacote[i] = false; }
   mem.getString("id", "").toCharArray(PLACA_ID, sizeof(PLACA_ID));
@@ -203,8 +220,8 @@ void loop() {
   if (temResposta) { temResposta = false; tratarResposta(respostaPendente); }
   uint32_t agoraMs = millis();
   // guarda moedas novas na memória (no máximo 1 gravação por segundo)
-  if (moedasPendentes != pendSalvo && agoraMs - ultimoSalvaPend >= 1000) { ultimoSalvaPend = agoraMs; salvarMoedas(); }
-  bool temDados = moedasDoLote > 0 || moedasPendentes > 0 || temFeitoPendente();
+  if (moedasPendentes + notasPendentes + premiosPendentes != pendSalvo && agoraMs - ultimoSalvaPend >= 1000) { ultimoSalvaPend = agoraMs; salvarMoedas(); }
+  bool temDados = moedasDoLote + notasDoLote + premiosDoLote > 0 || moedasPendentes + notasPendentes + premiosPendentes > 0 || temFeitoPendente();
   if (temDados && agoraMs - ultimoAviso >= AGRUPA_MS) montarPacote(true);
   else if (agoraMs - ultimoAviso >= envioS * 1000UL) montarPacote(true);        // "estou viva"
   else if (agoraMs - ultimoMontado >= RENOVA_MS) montarPacote(false);

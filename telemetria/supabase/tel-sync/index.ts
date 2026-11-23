@@ -1,4 +1,4 @@
-// tel-sync v3 — conversa da Telemetria MV Toy com o servidor (protocolo 2 · 20/11/2026).
+// tel-sync v4 — conversa da Telemetria MV Toy com o servidor (protocolo 2 · 23/11/2026: moedas, notas e prêmios).
 // A placa gera o pacote assinado; quem leva até aqui é a maquininha (Bluetooth → internet dela) ou a própria placa (Wi-Fi, piloto).
 // Envia: moedas lidas (por lote), créditos executados, sinal. Recebe: créditos pendentes e a configuração.
 // Segurança: a placa assina o pedido (x-placa, x-ts, x-sig = HMAC-SHA256(segredo, ts.corpo)).
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
   const agoraS = Math.floor(Date.now() / 1000);
   if (Math.abs(agoraS - ts) > 600) return resp(401, { erro: "relogio", agora: agoraS });
 
-  let b: { p?: number; via?: string; fw?: string; rssi?: number; lote?: number; moedas?: number; feitos?: string[]; boot?: boolean };
+  let b: { p?: number; via?: string; fw?: string; rssi?: number; lote?: number; moedas?: number; notas?: number; premios?: number; feitos?: string[]; boot?: boolean };
   try { b = JSON.parse(corpo); } catch { return resp(400, { erro: "json" }); }
   const via = b.via === "wifi" ? "wifi" : "ble";
   const lote = Math.max(0, Math.floor(Number(b.lote || 0)));
@@ -57,17 +57,23 @@ Deno.serve(async (req) => {
   // contato da placa (sem mexer na contagem)
   await db.from("mvt_tel_placas").update({ ultimo_contato: agoraIso, ultimo_rssi: b.rssi ?? null, firmware: b.fw ?? null }).eq("id", placaId);
 
-  // moedas: atualização condicional (se dois pedidos iguais chegarem juntos, só um conta)
-  const moedas = Math.max(0, Math.min(500, Math.floor(Number(b.moedas || 0))));
+  // moedas (COINA), notas (COINB) e prêmios (sensor de saída) do lote: atualização condicional (pedidos iguais juntos contam 1 vez só)
+  const lim = (v: unknown) => Math.max(0, Math.min(500, Math.floor(Number(v || 0))));
+  const moedas = lim(b.moedas), notas = lim(b.notas), premios = lim(b.premios);
   let atual = placa;
-  for (let tent = 0; tent < 3 && moedas > 0 && loteNovo(lote, atual.ultimo_lote); tent++) {
+  for (let tent = 0; tent < 3 && moedas + notas + premios > 0 && loteNovo(lote, atual.ultimo_lote); tent++) {
     let q = db.from("mvt_tel_placas")
-      .update({ ultimo_lote: lote, pulsos_lidos_total: Number(atual.pulsos_lidos_total || 0) + moedas })
+      .update({ ultimo_lote: lote, pulsos_lidos_total: Number(atual.pulsos_lidos_total || 0) + moedas + notas })
       .eq("id", placaId).eq("pulsos_lidos_total", atual.pulsos_lidos_total ?? 0);
     q = atual.ultimo_lote == null ? q.is("ultimo_lote", null) : q.eq("ultimo_lote", atual.ultimo_lote);
     const { data: feito } = await q.select("id");
     if (feito && feito.length) {
-      await db.from("mvt_tel_eventos").insert({ placa_id: placaId, codigo: placa.codigo, tipo: "moeda", pulsos: moedas, valor: moedas * Number(placa.valor_pulso) });
+      const vp = Number(placa.valor_pulso);
+      const ev = [];
+      if (moedas) ev.push({ placa_id: placaId, codigo: placa.codigo, tipo: "moeda", pulsos: moedas, valor: moedas * vp });
+      if (notas) ev.push({ placa_id: placaId, codigo: placa.codigo, tipo: "nota", pulsos: notas, valor: notas * vp });
+      if (premios) ev.push({ placa_id: placaId, codigo: placa.codigo, tipo: "premio", pulsos: premios, valor: 0 });
+      if (ev.length) await db.from("mvt_tel_eventos").insert(ev);
       break;
     }
     const { data: novo } = await db.from("mvt_tel_placas").select("*").eq("id", placaId).maybeSingle();

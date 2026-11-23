@@ -1,6 +1,6 @@
 # Telemetria MV Toy — montagem do piloto (para o montador)
 
-Versão 4 · 23/11/2026 · placa perfurada com peças prontas. [VALIDAR] = conferir na máquina antes.
+Versão 5 · 23/11/2026 · placa perfurada com peças prontas. [VALIDAR] = conferir na máquina antes.
 
 ## 1. Lista de compra (1 placa + reservas)
 | Qtd | Peça | Onde comprar (busca no Mercado Livre) |
@@ -10,7 +10,7 @@ Versão 4 · 23/11/2026 · placa perfurada com peças prontas. [VALIDAR] = confe
 | 1 | Diodo Schottky 1N5819 (protege se ligar 12V e GND invertidos) | https://lista.mercadolivre.com.br/1n5819 |
 | 1 | Conversor step-down LM2596 (com trimpot) ou MP1584 | https://lista.mercadolivre.com.br/step-down-lm2596 |
 | 1 pct | Resistores 1/4 W: 1 kΩ, 10 kΩ, 47 kΩ, 100 kΩ (kit sortido serve) | https://lista.mercadolivre.com.br/kit-resistores-1-4w |
-| 2 | Transistor BC547 (NPN) | https://lista.mercadolivre.com.br/bc547 |
+| 4 | Transistor BC547 (NPN) — 1 por entrada (moeda, nota, prêmio) + 1 reserva | https://lista.mercadolivre.com.br/bc547 |
 | 1 | Placa perfurada (ilhada) 5×7 cm | https://lista.mercadolivre.com.br/placa-perfurada-ilhada-5x7 |
 | 1 | Barra de pinos fêmea 40 vias (para o ESP32 encaixar, sem soldar direto) | https://lista.mercadolivre.com.br/barra-pinos-femea-2.54 |
 | 1 | Borne de parafuso 2,54/5,08 mm de 4 vias (entrada: 12V · GND · SINAL) | https://lista.mercadolivre.com.br/borne-kre-4-vias |
@@ -45,6 +45,13 @@ MÁQUINA (chicote)         TELEMETRIA MV TOY
  ESP32 3V3 ──► resistor 10k ──┘
  ESP32 GPIO 26 ──► resistor 1k ──► BC337 base (B)     (saída: solta o crédito)
 ```
+### Entradas extras (opcionais, já no programa v0.5/v0.4): noteiro e prêmio
+Na garra, o conector branco da placa-mãe vem escrito: GND · GND · GND · **COINA** · **COINB** · **OUT** · L1 · 12V · 12V · IN · 12V · **Sensor**.
+- **COINA** = moedeiro → é o SINAL do mapa acima (entrada GPIO 27 e saída de crédito).
+- **COINB** = noteiro / 2º moedeiro → monte um 2º circuito de entrada igual (47k + 100k + BC547 + 10k) e ligue o coletor no **GPIO 25**.
+- **OUT ou Sensor** = sensor do prêmio saindo [VALIDAR qual dos dois com o multímetro: deve mudar quando cai uma pelúcia] → 3º circuito de entrada igual, coletor no **GPIO 33**.
+Sem fio nessas entradas, a placa simplesmente não conta (não atrapalha). Meça antes: tensão parado e na hora do pulso, como no item 2.
+
 BC547 e BC337: com a parte reta virada para você, pernas da esquerda para a direita = C, B, E (BC337: confira no anúncio, alguns são C-B-E e outros E-B-C).
 Por que transistores: a simulação elétrica (pasta simulacao/) mostrou que a entrada funciona de 5 a 24 V sem ajuste e que o optoacoplador PC817 na saída FALHA em máquinas com sinal "forte" (ex.: 12 V com pull-up de 1k); o BC337 puxa o sinal a menos de 0,1 V em todos os casos.
 

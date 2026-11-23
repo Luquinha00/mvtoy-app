@@ -11,9 +11,11 @@ SerialStub Serial; EspStub ESP;
 static std::map<std::string, BLECharacteristic*> CARAC;
 void sim_registra_carac(const char* uuid, BLECharacteristic* c) { CARAC[uuid] = c; }
 
-static void (*ISR)() = nullptr;
+static std::map<int, void (*)()> ISRS; static void ISR_MOEDA() { if (ISRS[27]) ISRS[27](); }
+#define ISR (ISRS[27] ? ISR_MOEDA : nullptr)
 static int pinoSaida = 0, creditosMaquina = 0;
-void attachInterrupt(int, void (*f)(), int) { ISR = f; }
+void attachInterrupt(int pino, void (*f)(), int) { ISRS[pino] = f; }
+static void pulsoEm(int pino) { SIM_US += 120000; if (ISRS[pino]) ISRS[pino](); SIM_US += 60000; }
 void pinMode(int, int) {}
 int digitalRead(int) { return HIGH; }
 void sim_avanca_ms(unsigned long ms) { SIM_US += ms * 1000ULL; }
@@ -157,13 +159,25 @@ int main() {
   bs->cb->onConnect(nullptr); maquininha(); rodar(400000);
   confere(bs->desconexoes == desc + 1, "maquininha de verdade fica conectada (respostas assinadas)");
 
+  printf("13b) Noteiro e sensor de prêmio\n");
+  int moedasAntes = SV.moedas;
+  pulsoEm(25); pulsoEm(25); pulsoEm(25); pulsoEm(25); pulsoEm(25);   // nota de R$ 5 = 5 pulsos
+  pulsoEm(33);                                                          // saiu 1 pelúcia
+  rodar(21000);
+  confere(SV.notas == 5 && SV.premios == 1 && SV.moedas == moedasAntes, "5 pulsos de nota e 1 prêmio chegam separados das moedas");
+  int credAntes = creditosMaquina; SV.pendentes.push_back({"7f3c2a10-0000-4000-8000-000000000777", 2}); maquininha(); rodar(1000);
+  confere(creditosMaquina - credAntes == 2 && SV.notas == 5 && SV.premios == 1, "crédito remoto não vira nota nem prêmio");
+  pulsoEm(33); pulsoEm(33); rodar(3000, false);
+  premiosPendentes = 0; premiosDoLote = 0; setup(); BLEDevice::createServer()->cb->onConnect(nullptr); rodar(25000);
+  confere(SV.premios == 3, "prêmios guardados na memória sobrevivem à queda de energia");
+
   printf("14) Limites\n");
   antes = creditosMaquina;
   escrever("{\"ok\":true,\"agora\":" + std::to_string(SV.agora + 100) + ",\"creditos\":[{\"id\":\"y\",\"pulsos\":99,\"s\":\"" + SV.cred("y", 99, SV.agora + 100) + "\"}]}");
   confere(creditosMaquina == antes, "pedido de 99 pulsos recusado (máximo 50)");
   // pior caso de tamanho no Bluetooth: 5 confirmações + 3 créditos
   for (int i = 0; i < 5; i++) { feitos[i] = "7f3c2a10-0000-4000-8000-99999999999" + std::to_string(i); feitoConfirmado[i] = false; }
-  moedasDoLote = 499; loteAtual = 4000000000u; montarPacote(false);
+  moedasDoLote = 499; notasDoLote = 499; premiosDoLote = 499; loteAtual = 4000000000u; montarPacote(false);
   size_t tPac = CARAC[PACOTE_UUID]->valor.size();
   std::string cr3; for (int i = 0; i < 3; i++) { if (i) cr3 += ","; std::string id = "7f3c2a10-0000-4000-8000-88888888888" + std::to_string(i); cr3 += "{\"id\":\"" + id + "\",\"pulsos\":50,\"s\":\"" + SV.cred(id, 50, SV.agora) + "\"}"; }
   std::string rMax = "{\"ok\":true,\"agora\":" + std::to_string(SV.agora) + ",\"a\":\"" + std::string(32, 'f') + "\",\"creditos\":[" + cr3 + "],\"cfg\":{\"pulso_ms\":300,\"intervalo_ms\":500,\"envio_s\":3600}}";

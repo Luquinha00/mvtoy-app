@@ -1,5 +1,5 @@
 /*
-  Telemetria MV Toy · placa Wi-Fi (SÓ PILOTO / plano B) · v0.3 · 20/11/2026 (protocolo 2)
+  Telemetria MV Toy · placa Wi-Fi (SÓ PILOTO / plano B) · v0.4 · 23/11/2026 (protocolo 2 · moedas, notas e prêmios)
   A versão de rede é a Bluetooth (maquininha como central). Esta versão serve para testar a placa sozinha,
   ligada direto no Wi-Fi do ponto, antes do app da maquininha ficar pronto.
 
@@ -32,14 +32,14 @@
 char PLACA_ID[16]      = "";
 char PLACA_SEGREDO[65] = "";
 const char* URL_SYNC   = "https://koxormltidkmdwxgqbsm.supabase.co/functions/v1/tel-sync";
-const char* FIRMWARE   = "0.3";
-const int PINO_BOOT = 0, PINO_MOEDA = 27, PINO_CREDITO = 26, PINO_LED = 2;
+const char* FIRMWARE   = "0.4";
+const int PINO_BOOT = 0, PINO_MOEDA = 27, PINO_NOTA = 25, PINO_PREMIO = 33, PINO_CREDITO = 26, PINO_LED = 2;
 const uint32_t DEBOUNCE_US = 15000;
 const uint32_t AGRUPA_MS = 10000;
 
-volatile uint32_t moedasPendentes = 0, ultimoPulsoUs = 0;
+volatile uint32_t moedasPendentes = 0, ultimoPulsoUs = 0, notasPendentes = 0, ultimaNotaUs = 0, premiosPendentes = 0, ultimoPremioUs = 0;
 volatile bool emitindo = false;
-uint32_t pulsoMs = 60, intervaloMs = 80, envioS = 20, loteAtual = 0, moedasDoLote = 0, pendSalvo = 0;
+uint32_t pulsoMs = 60, intervaloMs = 80, envioS = 20, loteAtual = 0, moedasDoLote = 0, notasDoLote = 0, premiosDoLote = 0, pendSalvo = 0;
 long deltaRelogio = 0, ultAgoraCredito = 0;
 bool primeiroEnvio = true;
 uint32_t ultimoSync = 0, ultimoSalvaPend = 0;
@@ -49,6 +49,8 @@ const int MAX_FEITOS = 20;
 String feitos[MAX_FEITOS]; bool feitoConfirmado[MAX_FEITOS], feitoNoPacote[MAX_FEITOS]; int proxFeito = 0;
 
 void IRAM_ATTR aoPulsoMoeda() { if (emitindo) return; uint32_t a = micros(); if (a - ultimoPulsoUs > DEBOUNCE_US) { moedasPendentes++; ultimoPulsoUs = a; } }
+void IRAM_ATTR aoPulsoNota() { uint32_t a = micros(); if (a - ultimaNotaUs > DEBOUNCE_US) { notasPendentes++; ultimaNotaUs = a; } }       // COINB: noteiro / 2º moedeiro
+void IRAM_ATTR aoPulsoPremio() { uint32_t a = micros(); if (a - ultimoPremioUs > 50000) { premiosPendentes++; ultimoPremioUs = a; } }  // sensor de saída de prêmio (debounce 50 ms)
 
 String hmacHex(const String& msg) {
   byte out[32]; mbedtls_md_context_t ctx; mbedtls_md_init(&ctx);
@@ -58,7 +60,13 @@ String hmacHex(const String& msg) {
   mbedtls_md_hmac_finish(&ctx, out); mbedtls_md_free(&ctx);
   char hex[65]; for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", out[i]); hex[64] = 0; return String(hex);
 }
-void salvarMoedas() { uint32_t p = moedasPendentes; mem.putUInt("pend", p); mem.putUInt("mlote", moedasDoLote); pendSalvo = p; }
+void salvarMoedas() {
+  uint32_t p = moedasPendentes, n = notasPendentes, q = premiosPendentes;
+  mem.putUInt("pend", p); mem.putUInt("mlote", moedasDoLote);
+  mem.putUInt("npend", n); mem.putUInt("nlote", notasDoLote);
+  mem.putUInt("ppend", q); mem.putUInt("plote", premiosDoLote);
+  pendSalvo = p + n + q;
+}
 bool jaFeito(const String& id) { for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i] == id) return true; return false; }
 bool temFeitoPendente() { for (int i = 0; i < MAX_FEITOS; i++) if (feitos[i].length() && !feitoConfirmado[i]) return true; return false; }
 void marcarFeito(const String& id) {
@@ -94,12 +102,16 @@ void conectarWifi() {
 void sincronizar() {
   conectarWifi();
   if (WiFi.status() != WL_CONNECTED || !strlen(PLACA_ID) || !strlen(PLACA_SEGREDO)) return;
-  if (moedasDoLote == 0) {
-    noInterrupts(); moedasDoLote = moedasPendentes; moedasPendentes = 0; interrupts();
-    if (moedasDoLote > 0) { loteAtual++; mem.putUInt("lote", loteAtual); salvarMoedas(); }
+  if (moedasDoLote == 0 && notasDoLote == 0 && premiosDoLote == 0) {
+    noInterrupts();
+    moedasDoLote = moedasPendentes; moedasPendentes = 0;
+    notasDoLote = notasPendentes; notasPendentes = 0;
+    premiosDoLote = premiosPendentes; premiosPendentes = 0;
+    interrupts();
+    if (moedasDoLote + notasDoLote + premiosDoLote > 0) { loteAtual++; mem.putUInt("lote", loteAtual); salvarMoedas(); }
   }
   JsonDocument env;
-  env["p"] = 2; env["via"] = "wifi"; env["fw"] = FIRMWARE; env["rssi"] = WiFi.RSSI(); env["lote"] = loteAtual; env["moedas"] = moedasDoLote;
+  env["p"] = 2; env["via"] = "wifi"; env["fw"] = FIRMWARE; env["rssi"] = WiFi.RSSI(); env["lote"] = loteAtual; env["moedas"] = moedasDoLote; env["notas"] = notasDoLote; env["premios"] = premiosDoLote;
   if (primeiroEnvio) env["boot"] = true;
   JsonArray arr = env["feitos"].to<JsonArray>(); int n = 0;
   for (int i = 0; i < MAX_FEITOS; i++) { feitoNoPacote[i] = feitos[i].length() && !feitoConfirmado[i] && n < 10; if (feitoNoPacote[i]) { arr.add(feitos[i]); n++; } }
@@ -126,7 +138,7 @@ void sincronizar() {
   long agora = r["agora"].as<long>();
   if (r["a"].as<String>() == hmacHex("ok." + String(agora) + "." + String(loteAtual)).substring(0, 32)) {
     deltaRelogio = agora - (long)(millis() / 1000);
-    moedasDoLote = 0; primeiroEnvio = false; salvarMoedas();
+    moedasDoLote = 0; notasDoLote = 0; premiosDoLote = 0; primeiroEnvio = false; salvarMoedas();
     for (int i = 0; i < MAX_FEITOS; i++) if (feitoNoPacote[i]) { feitoConfirmado[i] = true; feitoNoPacote[i] = false; }
     if (r["cfg"]["pulso_ms"].is<int>()) pulsoMs = constrain(r["cfg"]["pulso_ms"].as<int>(), 20, 300);
     if (r["cfg"]["intervalo_ms"].is<int>()) intervaloMs = constrain(r["cfg"]["intervalo_ms"].as<int>(), 20, 500);
@@ -147,9 +159,14 @@ void sincronizar() {
 void setup() {
   pinMode(PINO_CREDITO, OUTPUT); digitalWrite(PINO_CREDITO, LOW); pinMode(PINO_LED, OUTPUT);
   pinMode(PINO_MOEDA, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_MOEDA), aoPulsoMoeda, RISING);
+  pinMode(PINO_NOTA, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_NOTA), aoPulsoNota, RISING);
+  pinMode(PINO_PREMIO, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(PINO_PREMIO), aoPulsoPremio, RISING);  // entrada sem fio = nunca dispara (pull-up)
   mem.begin("telmv", false);
   loteAtual = mem.getUInt("lote", 0); proxFeito = mem.getInt("prox", 0);
-  moedasDoLote = mem.getUInt("mlote", 0); moedasPendentes = mem.getUInt("pend", 0); pendSalvo = moedasPendentes;
+  moedasDoLote = mem.getUInt("mlote", 0); moedasPendentes = mem.getUInt("pend", 0);
+  notasDoLote = mem.getUInt("nlote", 0); notasPendentes = mem.getUInt("npend", 0);
+  premiosDoLote = mem.getUInt("plote", 0); premiosPendentes = mem.getUInt("ppend", 0);
+  pendSalvo = moedasPendentes + notasPendentes + premiosPendentes;
   ultAgoraCredito = (long)mem.getUInt("uagora", 0);
   for (int i = 0; i < MAX_FEITOS; i++) { feitos[i] = mem.getString(("f" + String(i)).c_str(), ""); feitoConfirmado[i] = false; feitoNoPacote[i] = false; }
   mem.getString("id", "").toCharArray(PLACA_ID, sizeof(PLACA_ID));
@@ -162,8 +179,8 @@ void setup() {
 
 void loop() {
   uint32_t agoraMs = millis();
-  if (moedasPendentes != pendSalvo && agoraMs - ultimoSalvaPend >= 1000) { ultimoSalvaPend = agoraMs; salvarMoedas(); }
-  bool temDados = moedasDoLote > 0 || moedasPendentes > 0 || temFeitoPendente();
+  if (moedasPendentes + notasPendentes + premiosPendentes != pendSalvo && agoraMs - ultimoSalvaPend >= 1000) { ultimoSalvaPend = agoraMs; salvarMoedas(); }
+  bool temDados = moedasDoLote + notasDoLote + premiosDoLote > 0 || moedasPendentes + notasPendentes + premiosPendentes > 0 || temFeitoPendente();
   uint32_t espera = temDados ? AGRUPA_MS : envioS * 1000UL;
   if (ultimoSync == 0 || agoraMs - ultimoSync >= espera) { ultimoSync = agoraMs ? agoraMs : 1; sincronizar(); }
   delay(10);

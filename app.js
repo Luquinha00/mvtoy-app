@@ -512,14 +512,15 @@ async function telaPlacas(){
   $('#app').innerHTML=`<div class="kpis"><div class="kpi g"><div class="l">Online</div><div class="v">${on}</div></div>
    <div class="kpi r"><div class="l">Offline</div><div class="v">${off}</div><div class="s">instaladas sem sinal</div></div>
    <div class="kpi"><div class="l">Sem máquina</div><div class="v">${ps.filter(p=>!p.codigo).length}</div><div class="s">ainda não instaladas</div></div>
-   <div class="kpi"><div class="l">Moedas hoje</div><div class="v">${brl(ps.reduce((s,p)=>s+num(p.moedas_hoje),0))}</div><div class="s">lidas pelas placas</div></div></div>
+   <div class="kpi"><div class="l">Entradas hoje</div><div class="v">${brl(ps.reduce((s,p)=>s+num(p.moedas_hoje),0))}</div><div class="s">moedas e notas lidas pelas placas</div></div>
+    <div class="kpi"><div class="l">Prêmios hoje</div><div class="v">${ps.reduce((s,p)=>s+num(p.premios_hoje),0)}</div><div class="s">pelúcias que saíram (sensor)</div></div></div>
    <div class="card"><h2>Telemetria MV Toy<button class="btn acao" id="parearP">Ligar placa à máquina</button></h2>
    <p class="sub" style="margin-bottom:10px">A placa da Telemetria MV Toy fica em paralelo com o moedeiro: conta as moedas e solta na máquina o crédito pago no Pix ou no cartão. Instalou? Ligue a placa à máquina e faça o <b>crédito de teste</b>: só está pronta quando a máquina mostrar o crédito.</p>
-   ${ps.length?`<div class="wrap"><table><tr><th>Placa</th><th>Máquina</th><th>Situação</th><th class="r">Moedas hoje</th><th></th></tr>${ps.map(p=>{const m=p.codigo&&maq(p.codigo);return `<tr>
+   ${ps.length?`<div class="wrap"><table><tr><th>Placa</th><th>Máquina</th><th>Situação</th><th class="r">Entradas hoje</th><th></th></tr>${ps.map(p=>{const m=p.codigo&&maq(p.codigo);return `<tr>
     <td><b>${esc(p.id)}</b><small>${p.dono&&D.pode.acessos?esc(p.dono)+' · ':''}pulso ${brl(p.valor_pulso)}${p.firmware?' · v'+esc(p.firmware):''}${p.rssi!=null?' · sinal '+p.rssi+' dBm':''}</small></td>
     <td>${p.codigo?`<a href="#m/${esc(p.codigo)}"><b>${esc(p.codigo)}</b></a><small>${m?esc(m.ponto):''}</small>`:'<span class="st y">sem máquina</span>'}</td>
     <td>${stPlaca(p)}${num(p.pendentes)?`<small>${p.pendentes} crédito(s) aguardando</small>`:''}</td>
-    <td class="r">${brl(p.moedas_hoje)}</td>
+    <td class="r">${brl(p.moedas_hoje)}${num(p.premios_hoje)?`<small>${num(p.premios_hoje)} prêmio(s)</small>`:''}</td>
     <td class="r">${p.codigo&&p.situacao!=='suspensa'?`<button class="btn s" data-cred="${esc(p.codigo)}">Crédito</button>`:''}</td></tr>`}).join('')}</table></div>`
    :'<p class="sub">Nenhuma placa cadastrada ainda. Elas aparecem aqui assim que forem gravadas e ligadas.</p>'}</div>
    <div class="card"><h2>Como instalar</h2><table>
