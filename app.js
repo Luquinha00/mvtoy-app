@@ -510,8 +510,8 @@ let TEL_LINHA='pulso';
 // Duas linhas de placa: Touch Pulse (máquinas de pulso) e Touch Vending (vending machines MDB)
 const LINHAS={pulso:{nome:'Touch Pulse',pre:'TMV'},mdb:{nome:'Touch Vending',pre:'TMD'}};
 // Regra do Lucas (23/11): Touch Pulse = máquina de um valor só (jogada). Touch Vending = vários produtos/preços (ex.: capinha).
-const linhaDe=t=>/caixa|surpresa|splendor|elegance|locker|vending|cards|pula pula|parfum|perfum|petizzo|capacete|snack|bebida|capinha|capa /i.test(t||'')?'mdb':'pulso';
-const VALIDAR_LINHA=t=>/cartinha/i.test(t||'');
+const linhaDe=t=>/caixa|surpresa|splendor|elegance|locker|vending|cards|pula pula|parfum|perfum|petizzo|capacete|snack|bebida|capinha|capa |cartinha/i.test(t||'')?'mdb':'pulso';
+const VALIDAR_LINHA=t=>false;
 const COMO_PULSO=`<tr><td><b>1</b></td><td>Máquina desligada: ache no chicote do moedeiro os fios 12 V, GND e SINAL.</td></tr>
    <tr><td><b>2</b></td><td>Ligue a placa em paralelo com o moedeiro (o moedeiro continua funcionando) e prenda a caixa na máquina.</td></tr>
    <tr><td><b>3</b></td><td>Ligue a máquina. A placa aparece como <b>Online</b> aqui quando falar com o servidor (pela maquininha ou pelo Wi-Fi no piloto).</td></tr>
@@ -530,7 +530,7 @@ async function telaPlacas(){
   const abas=`<div class="card" style="padding:10px 14px"><div class="lin" style="gap:8px">
     <button class="btn ${L==='pulso'?'':'s'}" data-linha="pulso">Touch Pulse (${nP})</button>
     <button class="btn ${L==='mdb'?'':'s'}" data-linha="mdb">Touch Vending (${nM})</button></div>
-    <p class="mini" style="margin-top:6px">${L==='pulso'?'Touch Pulse · máquinas de um valor só (garra, soco, basquete, fliperama, tesoura, air hockey, simulador): a placa lê os pulsos do moedeiro e solta o crédito pago no Pix ou no cartão.':'Touch Vending · máquinas com vários produtos ou preços (capinha, caixa surpresa, MV Cards, Pula Pula, Trostdorf, Petizzo, limpa capacete): a placa escuta o MDB da vending machine e registra cada venda com a seleção e o preço.'}</p></div>`;
+    <p class="mini" style="margin-top:6px">${L==='pulso'?'Touch Pulse · máquinas de um valor só (garra, soco, basquete, fliperama, tesoura, air hockey, simulador): a placa lê os pulsos do moedeiro e solta o crédito pago no Pix ou no cartão.':'Touch Vending · máquinas com vários produtos ou preços (capinha, cartinhas, locker, caixa surpresa, MV Cards, Pula Pula, Trostdorf, Petizzo, limpa capacete): a placa escuta o MDB da vending machine e registra cada venda com a seleção e o preço.'}</p></div>`;
   const kpis=L==='pulso'?`<div class="kpi"><div class="l">Entradas hoje</div><div class="v">${brl(ps.reduce((s,p)=>s+num(p.moedas_hoje),0))}</div><div class="s">moedas e notas lidas pelas placas</div></div>
     <div class="kpi"><div class="l">Prêmios hoje</div><div class="v">${ps.reduce((s,p)=>s+num(p.premios_hoje),0)}</div><div class="s">pelúcias que saíram (sensor)</div></div>`
    :`<div class="kpi"><div class="l">Vendas hoje</div><div class="v">${brl(ps.reduce((s,p)=>s+num(p.vendas_hoje),0))}</div><div class="s">${ps.reduce((s,p)=>s+num(p.vendas_qtd_hoje),0)} produto(s) vendidos</div></div>`;

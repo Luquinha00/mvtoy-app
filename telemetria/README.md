@@ -59,8 +59,8 @@ Suspensa: continua contando moedas e entregando o que o cliente final já pagou;
 | Linha | Para quê | Placas | Firmware |
 |---|---|---|---|
 | **Touch Pulse** | Máquinas de **um valor só** (regra do Lucas): garra, soco, basquete, fliperama, tesoura, air hockey, simulador | TMV-0001… | `firmware/telemetria_mvtoy_ble` (rede) · `firmware/telemetria_mvtoy_wifi` (piloto) |
-| **Touch Vending** | Máquinas com **vários produtos ou preços** (vending, MDB): capinha personalizada, caixa surpresa (Splendor/Locker), MV Cards, Pula Pula, Trostdorf Parfums, Petizzo, limpa capacete | TMD-0001… | `firmware/touch_vending` (v0.1, só escuta o MDB) |
+| **Touch Vending** | Máquinas com **vários produtos ou preços** (vending, MDB): capinha personalizada, cartinhas, caixa surpresa (Splendor/Locker), MV Cards, Pula Pula, Trostdorf Parfums, Petizzo, limpa capacete | TMD-0001… | `firmware/touch_vending` (v0.1, só escuta o MDB) |
 
 - O servidor (`supabase/tel-sync`, v5) é o mesmo para as duas linhas. A Touch Vending manda `vendas: [{i: seleção, v: preço, m: cartao|dinheiro}]` no mesmo pacote assinado.
 - No app, a tela Placas tem as duas abas. Cada aba lista as máquinas daquela linha e mostra quais já têm placa.
-- [VALIDAR] linha certa da máquina de cartinhas (o app marca "confirmar"). MVT-0034 (capinha): o faturamento oficial vem da VM Pay, não da PagPlush.
+- Confirmado pelo Lucas (23/11): locker, limpa capacete, cartinhas e capinha são Touch Vending. MVT-0034 (capinha): o faturamento oficial vem da VM Pay, não da PagPlush.
