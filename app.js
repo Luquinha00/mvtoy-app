@@ -670,7 +670,7 @@ async function telaPlacas(){
   const todas=await buscarPlacas();const L=TEL_LINHA;const ps=todas.filter(p=>(p.tipo||'pulso')===L);
   const on=ps.filter(p=>p.online).length;const off=ps.filter(p=>p.codigo&&!p.online).length;
   const nP=todas.filter(p=>(p.tipo||'pulso')==='pulso').length,nM=todas.filter(p=>p.tipo==='mdb').length;
-  const abas=`<div class="card" style="padding:10px 14px"><div class="lin" style="gap:8px">
+  const abas=`<div class="card" style="padding:10px 14px"><img src="marca/mvtoy-conecta.png" alt="MV Toy Conecta" style="height:44px;border-radius:8px;margin-bottom:8px"><div class="lin" style="gap:8px">
     <button class="btn ${L==='pulso'?'':'s'}" data-linha="pulso">Conecta Pulso (${nP})</button>
     <button class="btn ${L==='mdb'?'':'s'}" data-linha="mdb">Conecta Vending (${nM})</button></div>
     <p class="mini" style="margin-top:6px">${L==='pulso'?'MV Toy Conecta Pulso · máquinas de um valor só (garra, soco, basquete, fliperama, tesoura, air hockey, simulador): a placa lê os pulsos do moedeiro e solta o crédito pago no Pix ou no cartão.':'MV Toy Conecta Vending · máquinas com vários produtos ou preços (capinha, cartinhas, locker, caixa surpresa, MV Cards, Pula Pula, Trostdorf, Petizzo, limpa capacete): a placa escuta o MDB da vending machine e registra cada venda com a seleção e o preço.'}</p></div>`;
