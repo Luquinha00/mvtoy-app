@@ -47,12 +47,12 @@ const descItens=m=>(m.itens||[]).map(i=>`${String(num(i.qtd)).replace('.',',')}�
 const TAXA={debito:0.0099,credito:0.0299,pix:0};
 // Custos do local (ex.: internet do KM 58) divididos entre as máquinas ativas daquele ponto no mês
 const fimMes=mes=>{const d=new Date(mes+'T12:00:00');d.setMonth(d.getMonth()+1);d.setDate(0);return d.toISOString().slice(0,10)};
-const doLocal=(m,c)=>c&&c.local_id?m.local_id===c.local_id:String(m.ponto||'').toLowerCase().startsWith(String((c&&c.prefixo)||c||'').toLowerCase());
+const doLocal=(m,c)=>c&&c.codigo?m.codigo===c.codigo:c&&c.local_id?m.local_id===c.local_id:String(m.ponto||'').toLowerCase().startsWith(String((c&&c.prefixo)||c||'').toLowerCase());
 const localDe=m=>(D.locais||[]).find(l=>l.id===m.local_id);
 const regraTxt=l=>!l?'—':l.regra==='fixo'?brl0(l.aluguel_fixo)+'/máq. fixo':l.regra==='percentual'?String(num(l.comissao_pct)).replace('.',',')+'%':'sem aluguel';
 function custoLocal(m,mes){let t=0;const det=[];
   (D.custos_local||[]).forEach(c=>{if(String(c.desde)>fimMes(mes)||(c.ate&&String(c.ate)<mes)||!doLocal(m,c))return;
-    const n=D.maquinas.filter(x=>doLocal(x,c)&&x.status!=='Em estoque').length||1;const v=num(c.valor)/n;t+=v;det.push(c.nome+' ÷ '+n)});
+    const n=c.codigo?1:(D.maquinas.filter(x=>doLocal(x,c)&&x.status!=='Em estoque').length||1);const v=num(c.valor)/n;t+=v;det.push(c.nome+(n>1?' ÷ '+n:''))});
   return {v:Math.round(t*100)/100,det:det.join(' · ')}}
 const saidaMes=(m,mes)=>(m.saidas||[]).find(x=>String(x.mes).slice(0,10)===mes);
 function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l=leit(m,mes),cont=dinheiroContado(m,mes);
@@ -254,7 +254,7 @@ function linhasLucro(x){const L=(t,v,cl,sub)=>`<tr><td>${t}${sub?`<small>${sub}<
   ${L('− Prêmios que saíram (produtos)',x.custoP===null?'<span class="st y">falta custo</span>':brl(x.custoP),'color:var(--rt)',x.ps?`${x.ps.qtd} un. (${x.ps.fonte})${x.cp!==null?' × '+brl(x.cp):''}`:'sem contagem de prêmios')}
   ${L('− Comissão / aluguel do ponto',brl(x.com),'color:var(--rt)',x.pagaCom?`paga (devida pelo combinado: ${brl(x.devida)})`:x.devida?'devida pelo combinado (ainda não lançada como paga)':'comissão não cadastrada')}
   ${x.taxa?L('− Taxa da maquininha',brl(x.taxa),'color:var(--rt)','débito 0,99% · crédito 2,99% sobre o que entrou no cartão'):''}
-  ${x.local?L('− Custos do local (rateio)',brl(x.local),'color:var(--rt)',esc(x.localDet)):''}
+  ${x.local?L('− Custos fixos (local e máquina)',brl(x.local),'color:var(--rt)',esc(x.localDet)):''}
   ${x.outras?L('− Outras despesas da máquina',brl(x.outras),'color:var(--rt)'):''}${x.ent?L('+ Outras entradas',brl(x.ent),'color:var(--vd)'):''}
   ${L('<b>Lucro da máquina</b>','<b>'+brl(x.lucro)+'</b>',x.lucro>=0?'color:var(--vd)':'color:var(--rt)')}</table>`}
 function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrada no seu acesso. <a href="#maquinas">Voltar</a>');return}
@@ -312,7 +312,7 @@ function telaFinanceiro(){const c=contas(MES);const lm=lancMes(MES);const LR=luc
    <div class="kpi r"><div class="l">Comissões dos pontos</div><div class="v">${brl(comPaga||comDev)}</div><div class="s">${comPaga?'pagas · devidas '+brl(comDev):'devidas pelo combinado'}${semCom?' · '+semCom+' sem comissão cadastrada':''}</div></div>
    <div class="kpi ${LR.lucro>=0?'g':'r'}"><div class="l">Lucro estimado</div><div class="v">${brl(LR.lucro)}</div><div class="s">${LR.falta?LR.falta+' máquina(s) sem custo de pelúcia':LR.rec?Math.round(LR.lucro/LR.rec*100)+'% da receita':''}</div></div></div>`;
   if(D.pode.editar){const cl=D.custos_local||[];
-    h+=`<div class="card"><h2>Custos do local <span class="sub">divididos entre as máquinas do ponto</span><button class="btn acao" data-cloc="">+ Custo</button></h2>${cl.length?`<table><tr><th>Custo</th><th>Máquinas cujo ponto começa com</th><th class="r">R$/mês</th><th class="r">Desde</th></tr>${cl.map(c=>`<tr class="clic" data-cloc="${c.id}"><td>${esc(c.nome)}<small>${esc(c.categoria)}</small></td><td>${esc((localDe({local_id:c.local_id})||{}).nome||c.prefixo)}<small>${D.maquinas.filter(m=>doLocal(m,c)&&m.status!=='Em estoque').length} máquina(s)</small></td><td class="r">${brl(c.valor)}</td><td class="r">${dataBR(c.desde)}${c.ate?'<small>até '+dataBR(c.ate)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhum custo de local cadastrado.</p>'}</div>`}
+    h+=`<div class="card"><h2>Custos fixos mensais <span class="sub">do local (dividido entre as máquinas) ou de uma máquina só</span><button class="btn acao" data-cloc="">+ Custo</button></h2>${cl.length?`<table><tr><th>Custo</th><th>Máquinas cujo ponto começa com</th><th class="r">R$/mês</th><th class="r">Desde</th></tr>${cl.map(c=>`<tr class="clic" data-cloc="${c.id}"><td>${esc(c.nome)}<small>${esc(c.categoria)}</small></td><td>${c.codigo?'Só a '+esc(c.codigo):esc((localDe({local_id:c.local_id})||{}).nome||c.prefixo)}<small>${D.maquinas.filter(m=>doLocal(m,c)&&m.status!=='Em estoque').length} máquina(s)</small></td><td class="r">${brl(c.valor)}</td><td class="r">${dataBR(c.desde)}${c.ate?'<small>até '+dataBR(c.ate)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhum custo de local cadastrado.</p>'}</div>`}
   h+=`<div class="grid2"><div class="card"><h2>Dinheiro: telemetria × contagem</h2>${nCont?`<table><tr><td>Telemetria (máquinas contadas)</td><td class="r">${brl(dTel)}</td></tr><tr><td>Contado no cofre</td><td class="r">${brl(dCont)}</td></tr>
      <tr><td><b>Diferença</b></td><td class="r"><b style="color:${dCont-dTel>=0?'var(--vd)':'var(--rt)'}">${dCont-dTel>=0?'+':''}${brl(dCont-dTel)}</b></td></tr></table>
      <p class="mini" style="margin-top:6px">Vale o contado. A telemetria do dinheiro (${brl(dTelTot)} no mês) só é usada nas máquinas ainda sem contagem — os dois nunca somam.</p>`
@@ -533,13 +533,14 @@ function formLocal(l){const novo=!l;l=l||{nome:'',grupo:'',tipo:'comercio',cidad
 function formCustoLocal(c){const novo=!c;c=c||{nome:'',prefixo:'',categoria:'Telemetria e internet',valor:'',desde:mesAtual(),ate:null};
   modal(`<h3>${novo?'Novo custo do local':'Editar custo do local'}</h3><form class="form" id="fcl">
    <div><label>Nome</label><input id="cN" required value="${esc(c.nome)}" placeholder="Internet Lago Azul KM 58"></div>
-   ${D.locais?`<div><label>Local</label><select id="cL" required><option value="">— escolha —</option>${D.locais.map(l=>`<option value="${l.id}" ${l.id===c.local_id?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></div><input id="cP" type="hidden" value="${esc(c.prefixo||'')}">`
+   ${D.locais?`<div><label>Local</label><select id="cL"><option value="">— escolha —</option>${D.locais.map(l=>`<option value="${l.id}" ${l.id===c.local_id?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></div>
+   <div><label>Ou só uma máquina (licença, sistema próprio…)</label><select id="cM"><option value="">— vale para o local inteiro —</option>${D.maquinas.map(m=>`<option value="${m.codigo}" ${m.codigo===c.codigo?'selected':''}>${m.codigo} · ${esc(m.tipo)}</option>`).join('')}</select></div><input id="cP" type="hidden" value="${esc(c.prefixo||'')}">`
      :`<div><label>Máquinas cujo ponto começa com</label><input id="cP" required value="${esc(c.prefixo)}" placeholder="Lago Azul KM 58"></div>`}
    <div class="lin"><div><label>Categoria</label><select id="cC">${CAT_SAIDA.map(k=>`<option ${k===c.categoria?'selected':''}>${k}</option>`).join('')}</select></div><div><label>Valor por mês (R$)</label><input id="cV" type="number" step="0.01" min="0" required value="${c.valor}"></div></div>
    <div class="lin"><div><label>Desde</label><input id="cD" type="date" required value="${String(c.desde).slice(0,10)}"></div><div><label>Até (se parou)</label><input id="cA" type="date" value="${c.ate?String(c.ate).slice(0,10):''}"></div></div>
    <div class="msg" id="cMsg"></div><div class="bts">${novo?'':'<button type="button" class="btn s" id="cDel">Apagar</button>'}<button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar</button></div></form>`,w=>{
    const g=id=>w.querySelector(id).value;const env=async ap=>{const d=await rpc('mvt_admin_custo_local',{p_sessao:S(),p_id:novo?null:c.id,p_nome:g('#cN'),p_prefixo:g('#cP'),p_categoria:g('#cC'),
-     p_valor:Number(g('#cV')),p_desde:g('#cD'),p_ate:g('#cA')||null,p_apagar:ap,...(w.querySelector('#cL')?{p_local_id:g('#cL')||null}:{})});if(d.erro){w.querySelector('#cMsg').textContent=d.erro;return}w.remove();carregar(true)};
+     p_valor:Number(g('#cV')),p_desde:g('#cD'),p_ate:g('#cA')||null,p_apagar:ap,...(w.querySelector('#cL')?{p_local_id:g('#cL')||null,p_codigo:g('#cM')||null}:{})});if(d.erro){w.querySelector('#cMsg').textContent=d.erro;return}w.remove();carregar(true)};
    w.querySelector('#fcl').onsubmit=e=>{e.preventDefault();env(false)};if(!novo)w.querySelector('#cDel').onclick=()=>{if(confirm('Apagar este custo?'))env(true)}})}
 document.addEventListener('click',e=>{const tr=e.target.closest('tr[data-prod]');if(tr)formProduto(((D.estoque||{}).produtos||[]).find(p=>p.id===tr.dataset.prod))});
 const CATS_PROD=['Pelúcia','Embalagem','Conteúdo de caixa','Carta colecionável','Capinha','Insumo','Outros'];
