@@ -47,10 +47,12 @@ const descItens=m=>(m.itens||[]).map(i=>`${String(num(i.qtd)).replace('.',',')}�
 const TAXA={debito:0.0099,credito:0.0299,pix:0};
 // Custos do local (ex.: internet do KM 58) divididos entre as máquinas ativas daquele ponto no mês
 const fimMes=mes=>{const d=new Date(mes+'T12:00:00');d.setMonth(d.getMonth()+1);d.setDate(0);return d.toISOString().slice(0,10)};
-const doLocal=(m,pre)=>String(m.ponto||'').toLowerCase().startsWith(String(pre||'').toLowerCase());
+const doLocal=(m,c)=>c&&c.local_id?m.local_id===c.local_id:String(m.ponto||'').toLowerCase().startsWith(String((c&&c.prefixo)||c||'').toLowerCase());
+const localDe=m=>(D.locais||[]).find(l=>l.id===m.local_id);
+const regraTxt=l=>!l?'—':l.regra==='fixo'?brl0(l.aluguel_fixo)+'/máq. fixo':l.regra==='percentual'?String(num(l.comissao_pct)).replace('.',',')+'%':'sem aluguel';
 function custoLocal(m,mes){let t=0;const det=[];
-  (D.custos_local||[]).forEach(c=>{if(String(c.desde)>fimMes(mes)||(c.ate&&String(c.ate)<mes)||!doLocal(m,c.prefixo))return;
-    const n=D.maquinas.filter(x=>doLocal(x,c.prefixo)&&x.status!=='Em estoque').length||1;const v=num(c.valor)/n;t+=v;det.push(c.nome+' ÷ '+n)});
+  (D.custos_local||[]).forEach(c=>{if(String(c.desde)>fimMes(mes)||(c.ate&&String(c.ate)<mes)||!doLocal(m,c))return;
+    const n=D.maquinas.filter(x=>doLocal(x,c)&&x.status!=='Em estoque').length||1;const v=num(c.valor)/n;t+=v;det.push(c.nome+' ÷ '+n)});
   return {v:Math.round(t*100)/100,det:det.join(' · ')}}
 const saidaMes=(m,mes)=>(m.saidas||[]).find(x=>String(x.mes).slice(0,10)===mes);
 function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l=leit(m,mes),cont=dinheiroContado(m,mes);
@@ -143,7 +145,7 @@ function topo(){
   $('#who').innerHTML=`Olá,<b>${esc(D.eu.nome)}</b><span class="badge">${PAPEIS[D.eu.papel]||esc(D.eu.papel)}</span><button class="sair" id="btnSair">Sair</button>`;
   $('#btnSair').onclick=sair;
   const t=[['inicio','Início']];if(D.pode.dinheiro)t.push(['maquinas','Máquinas']);
-  if(D.pode.dinheiro)t.push(['financeiro','Financeiro']);
+  if(D.pode.dinheiro)t.push(['financeiro','Financeiro']);if(D.pode.editar&&D.locais)t.push(['locais','Locais']);
   t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel))t.push(['placas','Telemetria']);if(D.pode.acessos)t.push(['acessos','Acessos']);
   const tabs=$('#tabs');tabs.style.display='';tabs.innerHTML=t.map(([k,n])=>`<a href="#${k}" data-k="${k}">${n}</a>`).join('')}
 function rota(){if(!D)return;const h=decodeURIComponent(location.hash.slice(1))||'inicio';
@@ -152,7 +154,8 @@ function rota(){if(!D)return;const h=decodeURIComponent(location.hash.slice(1))|
   if(h.startsWith('m/'))return telaMaquina(h.slice(2));
   if(h==='placas'&&!(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel)))return telaInicio();
   if(h==='acessos'&&!D.pode.acessos)return telaInicio();
-  ({inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,estoque:telaEstoque,placas:telaPlacas,acessos:telaAcessos}[h]||telaInicio)()}
+  if(h==='locais'&&!(D.pode.editar&&D.locais))return telaInicio();
+  ({locais:telaLocais,inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,estoque:telaEstoque,placas:telaPlacas,acessos:telaAcessos}[h]||telaInicio)()}
 window.addEventListener('hashchange',rota);
 function seletorMes(){const ms=mesesComDado().slice(-13);
   return `<div class="meses">${ms.map(m=>`<button data-mes="${m}" class="${m===MES?'on':''}">${nomeMes(m)}${m===mesAtual()?' •':''}</button>`).join('')}</div>`}
@@ -258,7 +261,7 @@ function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrad
   const din=D.pode.dinheiro,est=estoqueMaq(m);
   let h=`<a class="voltar" href="#${din?'maquinas':'inicio'}">‹ Voltar</a><div class="card"><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
    <div><h1 class="tit">${esc(m.codigo)} · ${esc(m.tipo)}</h1><p class="sub">${esc(m.ponto)} · ${esc(m.cidade)}</p>
-   <div class="tags">${stTag(m)}<span>Jogada ${esc(m.jogada||'—')}</span><span>Prêmio: ${esc(m.premio||'—')}</span>${din&&m.dono?`<span>${esc(m.dono)}</span>`:''}
+   <div class="tags">${stTag(m)}${localDe(m)?`<span>Local: <b>${esc(localDe(m).nome)}</b></span>`:''}<span>Jogada ${esc(m.jogada||'—')}</span><span>Prêmio: ${esc(m.premio||'—')}</span>${din&&m.dono?`<span>${esc(m.dono)}</span>`:''}
    ${din&&(num(m.comissao_pct)||num(m.comissao_fixa))?`<span>Comissão ${num(m.comissao_pct)?String(num(m.comissao_pct)).replace('.',',')+'%':''}${num(m.comissao_pct)&&num(m.comissao_fixa)?' + ':''}${num(m.comissao_fixa)?brl(m.comissao_fixa):''}</span>`:''}
    <span>Última visita: ${m.ultima_visita?dataBR(m.ultima_visita):'nenhuma'}</span>
    ${m.itens&&m.itens.length?`<span>Cada prêmio: ${descItens(m)}</span>`:''}
@@ -309,7 +312,7 @@ function telaFinanceiro(){const c=contas(MES);const lm=lancMes(MES);const LR=luc
    <div class="kpi r"><div class="l">Comissões dos pontos</div><div class="v">${brl(comPaga||comDev)}</div><div class="s">${comPaga?'pagas · devidas '+brl(comDev):'devidas pelo combinado'}${semCom?' · '+semCom+' sem comissão cadastrada':''}</div></div>
    <div class="kpi ${LR.lucro>=0?'g':'r'}"><div class="l">Lucro estimado</div><div class="v">${brl(LR.lucro)}</div><div class="s">${LR.falta?LR.falta+' máquina(s) sem custo de pelúcia':LR.rec?Math.round(LR.lucro/LR.rec*100)+'% da receita':''}</div></div></div>`;
   if(D.pode.editar){const cl=D.custos_local||[];
-    h+=`<div class="card"><h2>Custos do local <span class="sub">divididos entre as máquinas do ponto</span><button class="btn acao" data-cloc="">+ Custo</button></h2>${cl.length?`<table><tr><th>Custo</th><th>Máquinas cujo ponto começa com</th><th class="r">R$/mês</th><th class="r">Desde</th></tr>${cl.map(c=>`<tr class="clic" data-cloc="${c.id}"><td>${esc(c.nome)}<small>${esc(c.categoria)}</small></td><td>${esc(c.prefixo)}<small>${D.maquinas.filter(m=>doLocal(m,c.prefixo)&&m.status!=='Em estoque').length} máquina(s)</small></td><td class="r">${brl(c.valor)}</td><td class="r">${dataBR(c.desde)}${c.ate?'<small>até '+dataBR(c.ate)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhum custo de local cadastrado.</p>'}</div>`}
+    h+=`<div class="card"><h2>Custos do local <span class="sub">divididos entre as máquinas do ponto</span><button class="btn acao" data-cloc="">+ Custo</button></h2>${cl.length?`<table><tr><th>Custo</th><th>Máquinas cujo ponto começa com</th><th class="r">R$/mês</th><th class="r">Desde</th></tr>${cl.map(c=>`<tr class="clic" data-cloc="${c.id}"><td>${esc(c.nome)}<small>${esc(c.categoria)}</small></td><td>${esc((localDe({local_id:c.local_id})||{}).nome||c.prefixo)}<small>${D.maquinas.filter(m=>doLocal(m,c)&&m.status!=='Em estoque').length} máquina(s)</small></td><td class="r">${brl(c.valor)}</td><td class="r">${dataBR(c.desde)}${c.ate?'<small>até '+dataBR(c.ate)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="sub">Nenhum custo de local cadastrado.</p>'}</div>`}
   h+=`<div class="grid2"><div class="card"><h2>Dinheiro: telemetria × contagem</h2>${nCont?`<table><tr><td>Telemetria (máquinas contadas)</td><td class="r">${brl(dTel)}</td></tr><tr><td>Contado no cofre</td><td class="r">${brl(dCont)}</td></tr>
      <tr><td><b>Diferença</b></td><td class="r"><b style="color:${dCont-dTel>=0?'var(--vd)':'var(--rt)'}">${dCont-dTel>=0?'+':''}${brl(dCont-dTel)}</b></td></tr></table>
      <p class="mini" style="margin-top:6px">Vale o contado. A telemetria do dinheiro (${brl(dTelTot)} no mês) só é usada nas máquinas ainda sem contagem — os dois nunca somam.</p>`
@@ -424,6 +427,8 @@ function formMaquina(m){const novo=!m;m=m||{codigo:'',tipo:'Garra',status:'Ativa
    <datalist id="tiposM">${[...new Set(D.maquinas.map(x=>x.tipo))].map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
    <div><label>Ponto</label><input id="mPon" value="${esc(m.ponto||'')}"></div>
    <div class="lin"><div><label>Cidade</label><input id="mCid" value="${esc(m.cidade||'')}"></div><div><label>Prêmio</label><input id="mPre" value="${esc(m.premio||'')}" placeholder="Disney, Tradicional, sem prêmio"></div></div>
+   ${D.locais?`<div><label>Local</label><select id="mLocal"><option value="">— sem local —</option>${D.locais.filter(l=>l.ativo||l.id===m.local_id).map(l=>`<option value="${l.id}" ${l.id===m.local_id?'selected':''}>${esc(l.nome)} · ${regraTxt(l)}</option>`).join('')}</select>
+   <p class="mini">Ao mudar de local, a máquina pega o aluguel/comissão do local novo.</p></div>`:''}
    <div><label>Marca</label><input id="mMarca" value="${esc(m.marca||'MV Toy')}" list="marcasM"><datalist id="marcasM">${[...new Set(['MV Toy','MV Cards','Pula Pula','Trostdorf Parfums','Petizzo Surpresa','Print My Case (licenciado)',...D.maquinas.map(marcaDe)])].map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
    <p class="mini">O código MVT é a máquina física; a marca é o que ela vende.</p></div>
    <div><label>Dono / sociedade</label><input id="mDon" value="${esc(m.dono||'MV Toy')}" list="donosM"></div>
@@ -448,6 +453,7 @@ function formMaquina(m){const novo=!m;m=m||{codigo:'',tipo:'Garra',status:'Ativa
     if(d.erro){w.querySelector('#mMsg').textContent=d.erro;return}
     const itens=[...box.querySelectorAll('.lin')].map(l=>({produto_id:l.querySelector('.iP').value,qtd:Number(l.querySelector('.iQ').value)||1})).filter(i=>i.produto_id);
     const r2=await rpc('mvt_admin_itens',{p_sessao:S(),p_codigo:g('#mCod').trim().toUpperCase(),p_itens:itens});if(r2.erro){w.querySelector('#mMsg').textContent=r2.erro;return}
+    const sl=w.querySelector('#mLocal');if(sl&&(sl.value||null)!==(m.local_id||null)){const r3=await rpc('mvt_admin_maquina_local',{p_sessao:S(),p_codigo:g('#mCod').trim().toUpperCase(),p_local_id:sl.value||null});if(r3.erro){w.querySelector('#mMsg').textContent=r3.erro;return}}
     w.remove();await carregar(true);if(novo)location.hash='m/'+g('#mCod').trim().toUpperCase()}})}
 
 // ---------- estoque (franqueador) ----------
@@ -481,15 +487,59 @@ function telaEstoque(){const E=D.estoque||{deposito:[],pessoas:[],movimentos:[]}
    <div class="card"><h2>Últimas movimentações</h2>${E.movimentos.length?`<div class="wrap"><table><tr><th>Data</th><th>Movimento</th><th class="r">Qtd</th><th></th></tr>${E.movimentos.map(x=>`<tr><td>${dataBR(x.data)}</td><td>${TIPOS_MOV[x.tipo]||x.tipo} · ${esc(x.produto)}<small>${[x.pessoa?esc(x.pessoa):'',x.custo_unit!=null?brl(x.custo_unit)+' cada':'',esc(x.obs||'')].filter(Boolean).join(' · ')}</small></td><td class="r">${x.qtd}</td><td class="r"><button class="lnk" data-dmov="${x.id}">apagar</button></td></tr>`).join('')}</table></div>`:'<p class="sub">Nenhuma movimentação.</p>'}</div>`;
   $('#app').innerHTML=h;$('#novoProd').onclick=()=>formProduto(null)}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cloc]');if(b)formCustoLocal((D.custos_local||[]).find(c=>c.id===b.dataset.cloc))});
+const TIPOS_LOCAL={shopping:'Shopping',loja_propria:'Loja própria',posto:'Posto',comercio:'Comércio',estoque:'Estoque'};
+function telaLocais(){const L=D.locais||[];
+  const lin=L.map(l=>{const ms=D.maquinas.filter(m=>m.local_id===l.id);let rec=0,luc=0,tem=false;ms.forEach(m=>{const x=lucro(m,MES);if(x){rec+=x.rec;luc+=x.lucro;tem=true}});
+    const cus=(D.custos_local||[]).filter(c=>c.local_id===l.id).reduce((s,c)=>s+num(c.valor),0);
+    return {l,ms,rec,luc,tem,cus}});
+  const tot=lin.reduce((a,o)=>({rec:a.rec+o.rec,luc:a.luc+o.luc}),{rec:0,luc:0});
+  let h=seletorMes()+`<div class="kpis"><div class="kpi"><div class="l">Locais ativos</div><div class="v">${L.filter(l=>l.ativo&&l.tipo!=='estoque').length}</div><div class="s">${D.maquinas.filter(m=>!m.local_id).length} máquina(s) sem local</div></div>
+   <div class="kpi"><div class="l">Receita ${nomeMes(MES)}</div><div class="v">${brl(tot.rec)}</div><div class="s">soma dos locais</div></div>
+   <div class="kpi ${tot.luc>=0?'g':'r'}"><div class="l">Lucro dos locais</div><div class="v">${brl(tot.luc)}</div><div class="s">depois de aluguel, prêmios, taxas e custos do local</div></div></div>
+   <div class="card"><h2>Locais <span class="sub">clique para editar</span><button class="btn acao" data-local="">+ Local</button></h2><div class="wrap"><table>
+   <tr><th>Local</th><th>Regra do ponto</th><th class="r">Máq.</th><th class="r">Custos fixos</th><th class="r">Receita</th><th class="r">Lucro</th><th>Relatório</th></tr>
+   ${lin.map(({l,ms,rec,luc,tem,cus})=>`<tr class="clic" data-local="${l.id}"><td><b>${esc(l.nome)}</b>${l.ativo?'':' <span class="st off">inativo</span>'}<small>${TIPOS_LOCAL[l.tipo]||l.tipo}${l.grupo?' · '+esc(l.grupo):''}${l.cidade?' · '+esc(l.cidade):''}</small></td>
+     <td>${regraTxt(l)}</td><td class="r">${ms.length}</td><td class="r">${cus?brl(cus):'—'}</td><td class="r">${tem?brl(rec):'—'}</td>
+     <td class="r" style="color:${luc>=0?'var(--vd)':'var(--rt)'}">${tem?brl(luc):'—'}</td>
+     <td>${l.relatorio_canal==='nenhum'?'—':(l.relatorio_canal==='email'?'e-mail':'portal')+' '+(l.relatorio_freq||'')}${l.relatorio_canal==='portal'&&!l.portal_url?' <span class="st y">falta link</span>':''}</td></tr>`).join('')}</table></div>
+   <p class="mini" style="margin-top:6px">Lucro do local = soma do lucro das máquinas dele no mês (já com aluguel/comissão, prêmios, taxa da maquininha e custos do local, como a internet).</p></div>`;
+  $('#app').innerHTML=h}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-local]');if(!b||!D||!D.locais)return;formLocal(D.locais.find(l=>l.id===b.dataset.local))});
+function formLocal(l){const novo=!l;l=l||{nome:'',grupo:'',tipo:'comercio',cidade:'',regra:'percentual',comissao_pct:20,aluguel_fixo:0,relatorio_canal:'nenhum',relatorio_freq:'',relatorio_para:'',portal_url:'',contato:'',obs:'',ativo:true};
+  const op=(o,v)=>Object.entries(o).map(([k,n])=>`<option value="${k}" ${k===v?'selected':''}>${n}</option>`).join('');
+  const nm=novo?0:D.maquinas.filter(m=>m.local_id===l.id).length;
+  modal(`<h3>${novo?'Novo local':'Editar local'}</h3><form class="form" id="flo">
+   <div><label>Nome</label><input id="oN" required value="${esc(l.nome)}" placeholder="Lago Azul KM 58"></div>
+   <div class="lin"><div><label>Tipo</label><select id="oT">${op(TIPOS_LOCAL,l.tipo)}</select></div><div><label>Grupo (opcional)</label><input id="oG" value="${esc(l.grupo||'')}" placeholder="Lago Azul"></div></div>
+   <div><label>Cidade</label><input id="oC" value="${esc(l.cidade||'')}"></div>
+   <div class="lin"><div><label>Regra do ponto</label><select id="oR">${op({percentual:'% do faturamento',fixo:'Aluguel fixo por máquina',nenhuma:'Sem aluguel'},l.regra)}</select></div>
+   <div><label>% do faturamento</label><input id="oP" type="number" step="0.01" min="0" max="100" value="${num(l.comissao_pct)}"></div><div><label>Fixo por máquina (R$/mês)</label><input id="oF" type="number" step="0.01" min="0" value="${num(l.aluguel_fixo)}"></div></div>
+   ${novo?'':`<label class="chk"><input type="checkbox" id="oA"> Aplicar esta regra às ${nm} máquina(s) deste local</label>`}
+   <div class="lin"><div><label>Relatório de faturamento</label><select id="oRc">${op({nenhum:'Não envia',email:'Por e-mail',portal:'No portal do local'},l.relatorio_canal)}</select></div>
+   <div><label>Frequência</label><select id="oRf">${op({'':'—',semanal:'Semanal',mensal:'Mensal'},l.relatorio_freq||'')}</select></div></div>
+   <div><label>E-mail do relatório</label><input id="oE" type="email" value="${esc(l.relatorio_para||'')}"></div>
+   <div><label>Link do portal</label><input id="oU" type="url" value="${esc(l.portal_url||'')}" placeholder="https://..."></div>
+   <div><label>Contato</label><input id="oK" value="${esc(l.contato||'')}" placeholder="nome e função (sem telefone)"></div>
+   <div><label>Observações</label><textarea id="oO" rows="2">${esc(l.obs||'')}</textarea></div>
+   <label class="chk"><input type="checkbox" id="oAt" ${l.ativo?'checked':''}> Local ativo</label>
+   <div class="msg" id="oMsg"></div><div class="bts"><button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar</button></div></form>`,w=>{
+   const g=id=>w.querySelector(id);
+   g('#flo').onsubmit=async e=>{e.preventDefault();g('#oMsg').textContent='Salvando…';
+    const dados={nome:g('#oN').value,grupo:g('#oG').value,tipo:g('#oT').value,cidade:g('#oC').value,regra:g('#oR').value,comissao_pct:Number(g('#oP').value||0),
+      aluguel_fixo:Number(g('#oF').value||0),relatorio_canal:g('#oRc').value,relatorio_freq:g('#oRf').value,relatorio_para:g('#oE').value,portal_url:g('#oU').value,
+      contato:g('#oK').value,obs:g('#oO').value,ativo:g('#oAt').checked};
+    const d=await rpc('mvt_admin_local',{p_sessao:S(),p_id:novo?null:l.id,p_dados:dados,p_aplicar:!novo&&g('#oA')&&g('#oA').checked});
+    if(d.erro){g('#oMsg').textContent=d.erro;return}w.remove();carregar(true)}})}
 function formCustoLocal(c){const novo=!c;c=c||{nome:'',prefixo:'',categoria:'Telemetria e internet',valor:'',desde:mesAtual(),ate:null};
   modal(`<h3>${novo?'Novo custo do local':'Editar custo do local'}</h3><form class="form" id="fcl">
    <div><label>Nome</label><input id="cN" required value="${esc(c.nome)}" placeholder="Internet Lago Azul KM 58"></div>
-   <div><label>Máquinas cujo ponto começa com</label><input id="cP" required value="${esc(c.prefixo)}" placeholder="Lago Azul KM 58"></div>
+   ${D.locais?`<div><label>Local</label><select id="cL" required><option value="">— escolha —</option>${D.locais.map(l=>`<option value="${l.id}" ${l.id===c.local_id?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></div><input id="cP" type="hidden" value="${esc(c.prefixo||'')}">`
+     :`<div><label>Máquinas cujo ponto começa com</label><input id="cP" required value="${esc(c.prefixo)}" placeholder="Lago Azul KM 58"></div>`}
    <div class="lin"><div><label>Categoria</label><select id="cC">${CAT_SAIDA.map(k=>`<option ${k===c.categoria?'selected':''}>${k}</option>`).join('')}</select></div><div><label>Valor por mês (R$)</label><input id="cV" type="number" step="0.01" min="0" required value="${c.valor}"></div></div>
    <div class="lin"><div><label>Desde</label><input id="cD" type="date" required value="${String(c.desde).slice(0,10)}"></div><div><label>Até (se parou)</label><input id="cA" type="date" value="${c.ate?String(c.ate).slice(0,10):''}"></div></div>
    <div class="msg" id="cMsg"></div><div class="bts">${novo?'':'<button type="button" class="btn s" id="cDel">Apagar</button>'}<button type="button" class="btn s" data-fechar>Cancelar</button><button class="btn">Salvar</button></div></form>`,w=>{
    const g=id=>w.querySelector(id).value;const env=async ap=>{const d=await rpc('mvt_admin_custo_local',{p_sessao:S(),p_id:novo?null:c.id,p_nome:g('#cN'),p_prefixo:g('#cP'),p_categoria:g('#cC'),
-     p_valor:Number(g('#cV')),p_desde:g('#cD'),p_ate:g('#cA')||null,p_apagar:ap});if(d.erro){w.querySelector('#cMsg').textContent=d.erro;return}w.remove();carregar(true)};
+     p_valor:Number(g('#cV')),p_desde:g('#cD'),p_ate:g('#cA')||null,p_apagar:ap,...(w.querySelector('#cL')?{p_local_id:g('#cL')||null}:{})});if(d.erro){w.querySelector('#cMsg').textContent=d.erro;return}w.remove();carregar(true)};
    w.querySelector('#fcl').onsubmit=e=>{e.preventDefault();env(false)};if(!novo)w.querySelector('#cDel').onclick=()=>{if(confirm('Apagar este custo?'))env(true)}})}
 document.addEventListener('click',e=>{const tr=e.target.closest('tr[data-prod]');if(tr)formProduto(((D.estoque||{}).produtos||[]).find(p=>p.id===tr.dataset.prod))});
 const CATS_PROD=['Pelúcia','Embalagem','Conteúdo de caixa','Carta colecionável','Capinha','Insumo','Outros'];
