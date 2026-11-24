@@ -1,0 +1,4 @@
+-- 23/11/2026 · Aviso de máquina desligada (regra do Lucas: 30 horas sem sinal)
+-- Coluna mvt_tel_placas.alerta_offline_em, config 'alerta_offline_horas' = 30, função mvt_checar_offline()
+-- (e-mail para lucastrostdorf00@gmail.com via mvt_enviar_email: desligadas e as que voltaram, 1 aviso por queda)
+-- e pg_cron 'mvt-alerta-offline' toda hora no minuto 17. mvt_dados devolve 'tel_ultimo' por máquina. Aplicado direto no banco.
