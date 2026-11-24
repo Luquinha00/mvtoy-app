@@ -1,0 +1,3 @@
+-- 24/11/2026 · faturamento por dia e por máquina (leitura diária PagPlush / VM Pay / Mercado Pago / placa)
+-- tabela mvt_vendas_dia (codigo, dia, valor, qtd, fonte); mvt_registrar_venda_dia(...) também atualiza ultima_venda
+-- mvt_dados devolve 'dias' (últimos 35). Aplicado direto no banco em 24/11.

@@ -287,6 +287,13 @@ function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrad
    ${!semPremio(m)?`<span>Na máquina: ${est?est.qtd+' pelúcias'+(m.capacidade?' de '+m.capacidade:'')+' (contagem '+dataBR(est.data)+')':'sem contagem'}</span>`:''}</div></div>
    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${D.pode.visitar?`<button class="btn" data-visita="${m.codigo}">Registrar visita</button>`:''}
    ${D.pode.lancar?`<button class="btn s" id="lancM">Lançar valor</button>`:''}${D.pode.editar?`<button class="btn s" id="editM">Editar</button>`:''}</div></div></div>`;
+  if(din&&(m.dias||[]).length){const por={};m.dias.forEach(x=>{const k=String(x.d).slice(0,10);por[k]=(por[k]||0)+num(x.v)});
+    const ds=[];for(let i=13;i>=0;i--){const d=new Date(hojeISO()+'T12:00:00');d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);ds.push({k,v:por[k]??null})}
+    const mx=Math.max(1,...ds.map(x=>x.v||0)),s7=ds.slice(-7).reduce((a,x)=>a+(x.v||0),0),s7a=ds.slice(0,7).reduce((a,x)=>a+(x.v||0),0);
+    h+=`<div class="card"><h2>Últimos 14 dias <span class="sub">semana ${brl(s7)}${s7a?` · anterior ${brl(s7a)} (${s7>=s7a?'▲':'▼'} ${Math.abs(Math.round((s7/s7a-1)*100))}%)`:''}</span></h2>
+     <div style="display:flex;align-items:flex-end;gap:4px;height:110px">${ds.map(x=>`<div title="${dataBR(x.k)}: ${x.v===null?'sem dado':brl(x.v)}" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+       <div style="width:100%;height:${x.v===null?2:Math.max(2,Math.round(x.v/mx*90))}px;background:${x.v===null?'var(--ln)':x.v>0?'var(--roxo)':'var(--rt)'};border-radius:4px 4px 0 0"></div><small style="font-size:9px;color:var(--cz)">${x.k.slice(8)}</small></div>`).join('')}</div>
+     <p class="mini" style="margin-top:6px">Faturamento por dia (leitura diária). Barra vermelha = dia sem venda; cinza = sem leitura.</p></div>`}
   if((m.dentro||[]).length){const tq=m.dentro.reduce((s,i)=>s+num(i.qtd),0),tv=m.dentro.reduce((s,i)=>s+num(i.qtd)*num(i.custo),0);
     h+=`<div class="card"><h2>Dentro da máquina <span class="sub">${tq} itens${din?' · '+brl(tv)+' a custo':''} · contagem de ${dataBR(m.dentro[0].data)}</span></h2><table><tr><th>Produto</th><th class="r">Qtd</th>${din?'<th class="r">Custo</th><th class="r">Total</th>':''}</tr>
      ${m.dentro.map(i=>`<tr><td>${esc(i.nome)}</td><td class="r">${num(i.qtd)}</td>${din?`<td class="r">${i.custo!=null?brl(i.custo):'<span class="st y">falta</span>'}</td><td class="r">${i.custo!=null?brl(num(i.qtd)*num(i.custo)):'—'}</td>`:''}</tr>`).join('')}</table>
