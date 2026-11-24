@@ -164,6 +164,21 @@ document.addEventListener('click',e=>{const b=e.target.closest('button[data-mes]
 const parcial=()=>MES===mesAtual()?'<span class="st y">mês em andamento</span>':'';
 
 // ---------- início ----------
+// Alertas: o que pede atenção agora (sem servidor: calculado com os dados já carregados)
+function alertas(){const A=[];const hoje=new Date(hojeISO()+'T12:00:00');const mf=ultimoMesFechado();
+  D.maquinas.filter(m=>m.status==='Ativa').forEach(m=>{
+    const x=lucro(m,mf);if(x&&x.rec>0&&x.lucro<0)A.push({n:2,m,t:`deu prejuízo em ${nomeMes(mf)} (${brl(x.lucro)}) — não pagou o ponto`});
+    else if(x&&num(m.comissao_fixa)>0&&x.rec<num(m.comissao_fixa))A.push({n:2,m,t:`faturou ${brl(x.rec)} em ${nomeMes(mf)}, menos que o aluguel fixo (${brl0(m.comissao_fixa)})`});
+    if(!semPremio(m)){const d=m.ultima_visita?Math.round((hoje-new Date(String(m.ultima_visita).slice(0,10)+'T12:00:00'))/864e5):null;
+      if(d===null)A.push({n:1,m,t:'nunca teve visita registrada'});else if(d>14)A.push({n:1,m,t:`sem visita há ${d} dias`});
+      const e=estoqueMaq(m);if(e&&m.capacidade&&e.qtd<m.capacidade*0.25)A.push({n:1,m,t:`poucos prêmios dentro (${e.qtd} de ${m.capacidade})`})}
+    if(!leit(m,mf)&&!(m.leituras||[]).length)A.push({n:0,m,t:'sem faturamento registrado no app'})});
+  (D.locais||[]).filter(l=>l.ativo&&l.relatorio_canal==='portal'&&!l.portal_url).forEach(l=>A.push({n:0,l,t:'relatório pelo portal sem o link do portal'}));
+  D.maquinas.filter(m=>!m.local_id&&m.status==='Ativa').forEach(m=>A.push({n:0,m,t:'sem local cadastrado'}));
+  return A.sort((a,b)=>b.n-a.n)}
+function cardAlertas(){if(!D.pode.editar)return '';const A=alertas();if(!A.length)return '<div class="card"><h2>Alertas</h2><p class="sub">Nada pedindo atenção agora.</p></div>';
+  const cor=['','y','off'];
+  return `<div class="card"><h2>Alertas <span class="sub">${A.length} item(ns)</span></h2><table>${A.slice(0,15).map(a=>`<tr ${a.m?`class="clic" data-cod="${a.m.codigo}"`:''}><td>${a.m?`<span class="mvt">${a.m.codigo}</span><small>${esc(a.m.tipo)} · ${esc((localDe(a.m)||{}).nome||a.m.ponto)}</small>`:`<b>${esc(a.l.nome)}</b>`}</td><td><span class="st ${cor[a.n]}">${a.n===2?'dinheiro':a.n===1?'operação':'cadastro'}</span> ${a.t}</td></tr>`).join('')}</table>${A.length>15?`<p class="mini">+ ${A.length-15} outros.</p>`:''}</div>`}
 function telaInicio(){
   if(!D.maquinas.length){vazio('Olá, '+esc(D.eu.nome)+'! Ainda não há máquinas ligadas ao seu acesso.<br>Fale com a MV Toy para liberar.');return}
   if(!D.pode.dinheiro)return telaRota('inicio');
@@ -197,6 +212,7 @@ function telaInicio(){
   const linha=x=>`<tr class="clic" data-cod="${x.m.codigo}"><td><span class="mvt">${x.m.codigo}</span><small>${esc(x.m.tipo)} · ${esc(x.m.ponto)}</small></td><td class="r">${brl(x.f)}<div class="bar"><i style="width:${Math.round(x.f/mx*100)}%"></i></div></td></tr>`;
   h+=`<div class="card"><h2>Mais fortes · ${nomeMes(MES)} ${parcial()}</h2><table>${lin.slice(0,5).map(linha).join('')||'<tr><td class="sub">Sem dados no mês.</td></tr>'}</table>
    ${lin.length>5?`<h2 style="margin-top:14px">Mais fracas</h2><table>${lin.slice(-3).reverse().map(linha).join('')}</table>`:''}</div></div>`;
+  h+=cardAlertas();
   h+=`<p class="nota y"><b>Sobre os dados:</b> cartão, Pix e remoto vêm da telemetria PagPlush; o dinheiro vale a contagem do cofre (sem contagem, usa a telemetria). O lucro desconta pelúcias, comissão do ponto e despesas lançadas.</p>`;
   $('#app').innerHTML=h}
 
@@ -276,6 +292,8 @@ function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrad
     h+=seletorMes()+`<div class="kpis"><div class="kpi"><div class="l">Receita ${nomeMes(MES)}</div><div class="v">${x?brl(x.rec):'—'}</div><div class="s">${MES===mesAtual()?'parcial':md?'média 3 meses: '+brl0(md):'—'}</div></div>
      <div class="kpi"><div class="l">Prêmios que saíram</div><div class="v">${x&&x.ps?x.ps.qtd:semPremio(m)?'—':'?'}</div><div class="s">${x&&x.ps?x.ps.fonte:semPremio(m)?'máquina sem prêmio':'registre a contagem na visita'}</div></div>
      <div class="kpi r"><div class="l">Comissão do ponto</div><div class="v">${x?brl(x.com):'—'}</div><div class="s">${x&&x.pagaCom?'paga':'devida pelo combinado'}</div></div>
+     ${num(m.valor_maquina)?(()=>{let v=[],k=MES;for(let i=0;i<3;i++){k=mesAnterior(k);const y=lucro(m,k);if(y)v.push(y.lucro)}const lm=v.length?v.reduce((a,b)=>a+b,0)/v.length:null;
+       return `<div class="kpi"><div class="l">Retorno da máquina</div><div class="v">${lm>0?Math.ceil(num(m.valor_maquina)/lm)+' meses':'não se paga'}</div><div class="s">valor ${brl0(m.valor_maquina)} · lucro médio ${lm===null?'—':brl0(lm)}/mês</div></div>`})():''}
      <div class="kpi ${x&&x.lucro>=0?'g':'r'}"><div class="l">Lucro da máquina</div><div class="v">${x?brl(x.lucro):'—'}</div><div class="s">${x&&x.semCusto?'falta o custo das pelúcias':x&&x.rec?Math.round(x.lucro/x.rec*100)+'% da receita':''}</div></div></div>`;
     h+=`<div class="grid2"><div class="card"><h2>Lucro · ${nomeMes(MES)} ${parcial()}</h2>${x?linhasLucro(x):'<p class="sub">Sem dados no mês.</p>'}</div>`;
     h+=`<div class="card"><h2>Receita por mês <span class="sub">toque na barra</span></h2>${grafico(m)}`;
@@ -429,6 +447,7 @@ function formMaquina(m){const novo=!m;m=m||{codigo:'',tipo:'Garra',status:'Ativa
    <div class="lin"><div><label>Cidade</label><input id="mCid" value="${esc(m.cidade||'')}"></div><div><label>Prêmio</label><input id="mPre" value="${esc(m.premio||'')}" placeholder="Disney, Tradicional, sem prêmio"></div></div>
    ${D.locais?`<div><label>Local</label><select id="mLocal"><option value="">— sem local —</option>${D.locais.filter(l=>l.ativo||l.id===m.local_id).map(l=>`<option value="${l.id}" ${l.id===m.local_id?'selected':''}>${esc(l.nome)} · ${regraTxt(l)}</option>`).join('')}</select>
    <p class="mini">Ao mudar de local, a máquina pega o aluguel/comissão do local novo.</p></div>`:''}
+   <div><label>Valor da máquina (R$, para o retorno)</label><input id="mValor" type="number" step="0.01" min="0" value="${m.valor_maquina??''}" placeholder="quanto custou"></div>
    <div><label>Marca</label><input id="mMarca" value="${esc(m.marca||'MV Toy')}" list="marcasM"><datalist id="marcasM">${[...new Set(['MV Toy','MV Cards','Pula Pula','Trostdorf Parfums','Petizzo Surpresa','Print My Case (licenciado)',...D.maquinas.map(marcaDe)])].map(t=>`<option value="${esc(t)}">`).join('')}</datalist>
    <p class="mini">O código MVT é a máquina física; a marca é o que ela vende.</p></div>
    <div><label>Dono / sociedade</label><input id="mDon" value="${esc(m.dono||'MV Toy')}" list="donosM"></div>
@@ -453,6 +472,7 @@ function formMaquina(m){const novo=!m;m=m||{codigo:'',tipo:'Garra',status:'Ativa
     if(d.erro){w.querySelector('#mMsg').textContent=d.erro;return}
     const itens=[...box.querySelectorAll('.lin')].map(l=>({produto_id:l.querySelector('.iP').value,qtd:Number(l.querySelector('.iQ').value)||1})).filter(i=>i.produto_id);
     const r2=await rpc('mvt_admin_itens',{p_sessao:S(),p_codigo:g('#mCod').trim().toUpperCase(),p_itens:itens});if(r2.erro){w.querySelector('#mMsg').textContent=r2.erro;return}
+    const vv=w.querySelector('#mValor').value;if((vv===''?null:Number(vv))!==(m.valor_maquina==null?null:num(m.valor_maquina))){const r4=await rpc('mvt_admin_valor_maquina',{p_sessao:S(),p_codigo:g('#mCod').trim().toUpperCase(),p_valor:vv===''?null:Number(vv)});if(r4.erro){w.querySelector('#mMsg').textContent=r4.erro;return}}
     const sl=w.querySelector('#mLocal');if(sl&&(sl.value||null)!==(m.local_id||null)){const r3=await rpc('mvt_admin_maquina_local',{p_sessao:S(),p_codigo:g('#mCod').trim().toUpperCase(),p_local_id:sl.value||null});if(r3.erro){w.querySelector('#mMsg').textContent=r3.erro;return}}
     w.remove();await carregar(true);if(novo)location.hash='m/'+g('#mCod').trim().toUpperCase()}})}
 
@@ -471,6 +491,7 @@ function telaEstoque(){const E=D.estoque||{deposito:[],pessoas:[],movimentos:[]}
    <div class="kpi"><div class="l">Com reabastecedores</div><div class="v">${totPes}</div><div class="s">itens</div></div>
    <div class="kpi"><div class="l">Nas máquinas</div><div class="v">${totMaq}</div><div class="s">pela última contagem</div></div>
    <div class="kpi"><div class="l">Total</div><div class="v">${totDep+totPes+totMaq}</div><div class="s">itens na rede</div></div>
+   <div class="kpi"><div class="l">Valor das máquinas</div><div class="v">${brl0(D.maquinas.reduce((t,m)=>t+num(m.valor_maquina),0))}</div><div class="s">${D.maquinas.filter(m=>num(m.valor_maquina)).length} de ${D.maquinas.length} com valor cadastrado</div></div>
    <div class="kpi g"><div class="l">Valor em produtos</div><div class="v">${brl(valor+valPes+valMaq)}</div><div class="s">a custo: depósito ${brl0(valor)} · pessoas ${brl0(valPes)} · máquinas ${brl0(valMaq)}</div></div></div>
    ${Object.keys(porLocal).length?`<div class="card"><h2>Produtos por local <span class="sub">pela última contagem por produto</span></h2><table><tr><th>Local</th><th class="r">Itens</th><th class="r">Valor a custo</th></tr>${Object.entries(porLocal).sort((a,b)=>b[1].v-a[1].v).map(([k,o])=>`<tr><td>${esc(k)}</td><td class="r">${o.q}</td><td class="r">${brl(o.v)}</td></tr>`).join('')}</table></div>`:''}
    <div class="card"><h2>Movimentar<span class="acao" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-mov="compra">+ Compra</button><button class="btn s" data-mov="entrega">Entregar ao reabastecedor</button><button class="btn s" data-mov="devolucao">Devolução</button><button class="btn s" data-mov="ajuste_deposito">Ajuste</button></span></h2>
