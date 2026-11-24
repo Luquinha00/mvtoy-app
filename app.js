@@ -423,11 +423,27 @@ function formVisita(cod){
     g('#vMsg').textContent='Salvando…';
     const itens=[...box.querySelectorAll('.lin')].map(l=>({produto_id:l.querySelector('.iP').value,encontrei:Number(l.querySelector('.iE').value||0),repus:Number(l.querySelector('.iR').value||0)}))
       .filter(i=>i.produto_id&&(i.encontrei||i.repus));
-    const d=itens.length?await rpc('mvt_salvar_visita_itens',{p_sessao:S(),p_codigo:g('#vMaq').value,p_data:g('#vData').value,p_recolhido:n('#vRec'),
-        p_limpeza:g('#vLim').checked,p_problema:g('#vPro').value,p_parada:g('#vPar').checked,p_itens:itens})
-      :await rpc('mvt_salvar_visita',{p_sessao:S(),p_codigo:g('#vMaq').value,p_data:g('#vData').value,p_repostos:n('#vRep'),p_visor:n('#vVis'),
-      p_recolhido:n('#vRec'),p_limpeza:g('#vLim').checked,p_problema:g('#vPro').value,p_parada:g('#vPar').checked});
+    const fn=itens.length?'mvt_salvar_visita_itens':'mvt_salvar_visita';
+    const corpo=itens.length?{p_sessao:S(),p_codigo:g('#vMaq').value,p_data:g('#vData').value,p_recolhido:n('#vRec'),
+        p_limpeza:g('#vLim').checked,p_problema:g('#vPro').value,p_parada:g('#vPar').checked,p_itens:itens}
+      :{p_sessao:S(),p_codigo:g('#vMaq').value,p_data:g('#vData').value,p_repostos:n('#vRep'),p_visor:n('#vVis'),
+      p_recolhido:n('#vRec'),p_limpeza:g('#vLim').checked,p_problema:g('#vPro').value,p_parada:g('#vPar').checked};
+    let d;try{d=await rpc(fn,corpo)}catch(_){d=null}
+    if(!d){filaGuardar(fn,corpo);w.remove();aviso('Sem internet: a visita ficou guardada no celular e será enviada sozinha quando a conexão voltar.');return}
     if(d.erro){g('#vMsg').textContent=d.erro;return}w.remove();carregar(true)}})}
+// Visitas feitas sem internet: guardadas no celular e enviadas quando a conexão volta
+const FILA_OFF='mvt_fila_offline';
+const filaLer=()=>{try{return JSON.parse(ls.get(FILA_OFF)||'[]')}catch(_){return []}};
+function filaGuardar(fn,corpo){const f=filaLer();f.push({fn,corpo,em:Date.now()});ls.set(FILA_OFF,JSON.stringify(f));filaBadge()}
+async function filaEnviar(){const f=filaLer();if(!f.length||!navigator.onLine)return;const resto=[];let ok=0;
+  for(const it of f){try{const d=await rpc(it.fn,{...it.corpo,p_sessao:S()||it.corpo.p_sessao});if(d&&!d.erro)ok++;else if(d&&d.erro)resto.push({...it,erro:d.erro});else resto.push(it)}catch(_){resto.push(it)}}
+  ls.set(FILA_OFF,JSON.stringify(resto.filter(x=>!x.erro||Date.now()-x.em<7*864e5)));filaBadge();
+  if(ok){aviso(ok+' visita(s) guardada(s) sem internet foram enviadas.');if(D)carregar(true)}}
+function filaBadge(){const n=filaLer().length;let b=document.getElementById('filaOff');
+  if(!n){if(b)b.remove();return}if(!b){b=document.createElement('div');b.id='filaOff';b.style.cssText='position:fixed;bottom:12px;left:12px;background:#FFC61C;color:#211C5E;padding:8px 12px;border-radius:12px;font-weight:700;font-size:13px;z-index:50;box-shadow:0 2px 8px #0003';b.onclick=filaEnviar;document.body.appendChild(b)}
+  b.textContent=n+' visita(s) esperando internet · tocar para enviar'}
+function aviso(t){const a=document.createElement('div');a.textContent=t;a.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#211C5E;color:#fff;padding:10px 14px;border-radius:12px;z-index:60;max-width:90%;font-size:14px';document.body.appendChild(a);setTimeout(()=>a.remove(),5000)}
+window.addEventListener('online',filaEnviar);setInterval(filaEnviar,60000);setTimeout(()=>{filaBadge();filaEnviar()},3000);
 function formLanc(l,cod){const novo=!l;l=l||{tipo:'saida',codigo:cod||'',data:hojeISO(),competencia:MES,status:'pago'};
   const cats=t=>(t==='saida'?CAT_SAIDA:CAT_ENTRADA).map(c=>`<option ${c===l.categoria?'selected':''}>${c}</option>`).join('');
   const optsMes=mesesComDado().slice(-13).map(m=>`<option value="${m}" ${m===String(l.competencia).slice(0,10)?'selected':''}>${nomeMes(m)}</option>`).join('');
