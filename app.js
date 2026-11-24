@@ -146,7 +146,7 @@ function topo(){
   $('#btnSair').onclick=sair;
   const t=[['inicio','Início']];if(D.pode.dinheiro)t.push(['maquinas','Máquinas']);
   if(D.pode.dinheiro)t.push(['financeiro','Financeiro']);if(D.pode.editar&&D.locais)t.push(['locais','Locais']);
-  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel))t.push(['placas','Telemetria']);if(D.pode.acessos)t.push(['acessos','Acessos']);
+  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel))t.push(['placas','Conecta']);if(D.pode.acessos)t.push(['acessos','Acessos']);
   const tabs=$('#tabs');tabs.style.display='';tabs.innerHTML=t.map(([k,n])=>`<a href="#${k}" data-k="${k}">${n}</a>`).join('')}
 function rota(){if(!D)return;const h=decodeURIComponent(location.hash.slice(1))||'inicio';
   const k=h.startsWith('m/')?'maquinas':h;document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));
@@ -643,9 +643,9 @@ async function buscarPlacas(){const r=await rpc('mvt_admin_placas',{p_sessao:S()
 const tempoDesde=t=>{if(!t)return 'nunca';const s=Math.floor((Date.now()-new Date(t))/1000);if(s<90)return 'agora';if(s<3600)return Math.floor(s/60)+' min';if(s<86400)return Math.floor(s/3600)+' h';return Math.floor(s/86400)+' dias'};
 const stPlaca=p=>(p.situacao==='suspensa'?'<span class="st y">Suspensa</span> ':'')+(p.online?'<span class="st">Online</span>':`<span class="st off">Offline · ${tempoDesde(p.ultimo_contato)}</span>`);
 let TEL_LINHA='pulso';
-// Duas linhas de placa: Touch Pulse (máquinas de pulso) e Touch Vending (vending machines MDB)
-const LINHAS={pulso:{nome:'Touch Pulse',pre:'TMV'},mdb:{nome:'Touch Vending',pre:'TMD'}};
-// Regra do Lucas (23/11): Touch Pulse = máquina de um valor só (jogada). Touch Vending = vários produtos/preços (ex.: capinha).
+// Duas linhas de placa: MV Toy Conecta Pulso (máquinas de pulso) e MV Toy Conecta Vending (vending machines MDB)
+const LINHAS={pulso:{nome:'MV Toy Conecta Pulso',pre:'TMV'},mdb:{nome:'MV Toy Conecta Vending',pre:'TMD'}};
+// Regra do Lucas (23/11): MV Toy Conecta Pulso = máquina de um valor só (jogada). MV Toy Conecta Vending = vários produtos/preços (ex.: capinha).
 const linhaDe=t=>/caixa|surpresa|splendor|elegance|locker|vending|cards|pula pula|parfum|perfum|petizzo|capacete|snack|bebida|capinha|capa |cartinha/i.test(t||'')?'mdb':'pulso';
 const VALIDAR_LINHA=t=>false;
 const COMO_PULSO=`<tr><td><b>1</b></td><td>Máquina desligada: ache no chicote do moedeiro os fios 12 V, GND e SINAL.</td></tr>
@@ -664,9 +664,9 @@ async function telaPlacas(){
   const on=ps.filter(p=>p.online).length;const off=ps.filter(p=>p.codigo&&!p.online).length;
   const nP=todas.filter(p=>(p.tipo||'pulso')==='pulso').length,nM=todas.filter(p=>p.tipo==='mdb').length;
   const abas=`<div class="card" style="padding:10px 14px"><div class="lin" style="gap:8px">
-    <button class="btn ${L==='pulso'?'':'s'}" data-linha="pulso">Touch Pulse (${nP})</button>
-    <button class="btn ${L==='mdb'?'':'s'}" data-linha="mdb">Touch Vending (${nM})</button></div>
-    <p class="mini" style="margin-top:6px">${L==='pulso'?'Touch Pulse · máquinas de um valor só (garra, soco, basquete, fliperama, tesoura, air hockey, simulador): a placa lê os pulsos do moedeiro e solta o crédito pago no Pix ou no cartão.':'Touch Vending · máquinas com vários produtos ou preços (capinha, cartinhas, locker, caixa surpresa, MV Cards, Pula Pula, Trostdorf, Petizzo, limpa capacete): a placa escuta o MDB da vending machine e registra cada venda com a seleção e o preço.'}</p></div>`;
+    <button class="btn ${L==='pulso'?'':'s'}" data-linha="pulso">Conecta Pulso (${nP})</button>
+    <button class="btn ${L==='mdb'?'':'s'}" data-linha="mdb">Conecta Vending (${nM})</button></div>
+    <p class="mini" style="margin-top:6px">${L==='pulso'?'MV Toy Conecta Pulso · máquinas de um valor só (garra, soco, basquete, fliperama, tesoura, air hockey, simulador): a placa lê os pulsos do moedeiro e solta o crédito pago no Pix ou no cartão.':'MV Toy Conecta Vending · máquinas com vários produtos ou preços (capinha, cartinhas, locker, caixa surpresa, MV Cards, Pula Pula, Trostdorf, Petizzo, limpa capacete): a placa escuta o MDB da vending machine e registra cada venda com a seleção e o preço.'}</p></div>`;
   const kpis=L==='pulso'?`<div class="kpi"><div class="l">Entradas hoje</div><div class="v">${brl(ps.reduce((s,p)=>s+num(p.moedas_hoje),0))}</div><div class="s">moedas e notas lidas pelas placas</div></div>
     <div class="kpi"><div class="l">Prêmios hoje</div><div class="v">${ps.reduce((s,p)=>s+num(p.premios_hoje),0)}</div><div class="s">pelúcias que saíram (sensor)</div></div>`
    :`<div class="kpi"><div class="l">Vendas hoje</div><div class="v">${brl(ps.reduce((s,p)=>s+num(p.vendas_hoje),0))}</div><div class="s">${ps.reduce((s,p)=>s+num(p.vendas_qtd_hoje),0)} produto(s) vendidos</div></div>`;

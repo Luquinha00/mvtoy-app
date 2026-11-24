@@ -1,5 +1,5 @@
 // tel-sync v5 — conversa da Telemetria MV Toy com o servidor (protocolo 2 · 23/11/2026).
-// Duas linhas de placa: Touch Pulse (tipo 'pulso': moedas, notas, prêmios, créditos) e Touch Vending (tipo 'mdb': vendas MDB).
+// Duas linhas de placa: MV Toy Conecta Pulso (tipo 'pulso': moedas, notas, prêmios, créditos) e MV Toy Conecta Vending (tipo 'mdb': vendas MDB).
 // A placa gera o pacote assinado; quem leva até aqui é a maquininha (Bluetooth → internet dela) ou a própria placa (Wi-Fi, piloto).
 // Envia: moedas lidas (por lote), créditos executados, sinal. Recebe: créditos pendentes e a configuração.
 // Segurança: a placa assina o pedido (x-placa, x-ts, x-sig = HMAC-SHA256(segredo, ts.corpo)).
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
   // moedas (COINA), notas (COINB) e prêmios (sensor de saída) do lote: atualização condicional (pedidos iguais juntos contam 1 vez só)
   const lim = (v: unknown) => Math.max(0, Math.min(500, Math.floor(Number(v || 0))));
   const moedas = lim(b.moedas), notas = lim(b.notas), premios = lim(b.premios);
-  // Touch Vending: vendas do lote (item = seleção da máquina, v = preço em R$, m = meio: cartao | dinheiro | ?)
+  // MV Toy Conecta Vending: vendas do lote (item = seleção da máquina, v = preço em R$, m = meio: cartao | dinheiro | ?)
   const MEIOS = ["cartao", "dinheiro"];
   const vendas = placa.tipo === "mdb" ? (Array.isArray(b.vendas) ? b.vendas : []).slice(0, 50)
     .map((x) => ({ i: Math.max(0, Math.min(65535, Math.floor(Number(x?.i ?? 0)))), v: Math.round(Number(x?.v ?? 0) * 100) / 100, m: MEIOS.includes(String(x?.m)) ? String(x?.m) : null }))

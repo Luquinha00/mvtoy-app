@@ -1,6 +1,6 @@
 /*
-  Touch Vending · Telemetria MV Toy para vending machines (MDB) · v0.1 · 23/11/2026 (protocolo 2)
-  Linha irmã da Touch Pulse (máquinas de pulso). Placas TMD-0001…
+  MV Toy Conecta Vending · Telemetria MV Toy para vending machines (MDB) · v0.1 · 23/11/2026 (protocolo 2)
+  Linha irmã da MV Toy Conecta Pulso (máquinas de pulso). Placas TMD-0001…
 
   O que faz (MODO 1 · SÓ ESCUTA):
    - Fica em paralelo no chicote MDB (6 vias) e LÊ as duas linhas: o que a máquina (VMC) manda e o que os
@@ -10,7 +10,7 @@
        VEND SUCCESS (13 02 item)        → VENDA no cartão/Pix (preço guardado)
        CASH SALE    (13 05 preço item)  → VENDA em dinheiro (máquinas que avisam o leitor)
      e o SETUP do leitor (fator de escala e casas decimais) para converter o preço em reais.
-   - Junta as vendas em lotes, assina (HMAC) e manda para o tel-sync, igual à Touch Pulse (Wi-Fi no piloto).
+   - Junta as vendas em lotes, assina (HMAC) e manda para o tel-sync, igual à MV Toy Conecta Pulso (Wi-Fi no piloto).
 
   [VALIDAR NA BANCADA] antes de instalar em ponto:
    1) A leitura do 9º bit (modo) com EspSoftwareSerial em SWSERIAL_8S1 + readParity().
@@ -22,7 +22,7 @@
    - MDB pino 4 (Master Receive, entra na VMC) → opto → GPIO 17
    - MDB pino 6 (comum da comunicação) → lado do LED dos optos; MDB pino 2 (GND de força) só para a fonte
    - Alimentação: MDB pino 1 (+24/34 V) → fusível → step-down (entrada até 40 V) → 5,0 V → VIN do ESP32
-  Gravação: "CFG TMD-0001 <chave>" no Monitor Serial (115200) ou pelo portal Wi-Fi "TOUCH-VENDING-xxxx".
+  Gravação: "CFG TMD-0001 <chave>" no Monitor Serial (115200) ou pelo portal Wi-Fi "MVTOY-CONECTA-V-xxxx".
   Bibliotecas: ArduinoJson 7, WiFiManager (tzapu) 2.x, EspSoftwareSerial (plerup) 8.x. Nenhum segredo neste arquivo.
 */
 #include <WiFi.h>
@@ -118,7 +118,7 @@ void lerMdb() {
   }
 }
 
-// ---------- servidor (mesmo protocolo da Touch Pulse) ----------
+// ---------- servidor (mesmo protocolo da MV Toy Conecta Pulso) ----------
 String hmacHex(const String& msg) {
   byte out[32]; mbedtls_md_context_t ctx; mbedtls_md_init(&ctx);
   mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1);
@@ -163,7 +163,7 @@ void portalConfig(bool forcar) {
   WiFiManagerParameter pId("placa", "Número da placa (ex.: TMD-0001)", PLACA_ID, 15);
   WiFiManagerParameter pSeg("seg", "Chave da placa", PLACA_SEGREDO, 64);
   wm.addParameter(&pId); wm.addParameter(&pSeg);
-  String rede = "TOUCH-VENDING-" + String((uint32_t)(ESP.getEfuseMac() >> 32), HEX);
+  String rede = "MVTOY-CONECTA-V-" + String((uint32_t)(ESP.getEfuseMac() >> 32), HEX);
   if (forcar) wm.startConfigPortal(rede.c_str()); else wm.autoConnect(rede.c_str());
   if (strlen(pId.getValue())) { strncpy(PLACA_ID, pId.getValue(), 15); mem.putString("id", PLACA_ID); }
   if (strlen(pSeg.getValue())) { strncpy(PLACA_SEGREDO, pSeg.getValue(), 64); mem.putString("seg", PLACA_SEGREDO); }
@@ -182,7 +182,7 @@ void lerSerial() {   // gravação na bancada: "CFG TMD-0001 <chave>"
 
 void setup() {
   Serial.begin(115200); pinMode(PINO_LED, OUTPUT); pinMode(PINO_BOOT, INPUT_PULLUP);
-  mem.begin("touchv", false);
+  mem.begin("mvtconv", false);
   mem.getString("id", "").toCharArray(PLACA_ID, sizeof(PLACA_ID));
   mem.getString("seg", "").toCharArray(PLACA_SEGREDO, sizeof(PLACA_SEGREDO));
   loteAtual = mem.getUInt("nlt", 0); fatorEscala = mem.getUChar("fator", 1); casas = mem.getUChar("casas", 2);
