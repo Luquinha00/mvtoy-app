@@ -1,0 +1,5 @@
+-- 23/11/2026 · Aviso de máquina sem faturamento há 2 dias (regra do Lucas)
+-- mvt_maquinas.ultima_venda / ultima_venda_fonte / alerta_sem_venda_em; config 'alerta_sem_venda_horas' = 48
+-- mvt_ultima_venda(codigo) = maior entre a leitura diária (PagPlush/VM Pay/Mercado Pago) e os eventos da placa própria
+-- mvt_registrar_ultima_venda(codigo, quando, fonte) — usado pela leitura diária
+-- mvt_checar_sem_venda() + pg_cron 'mvt-alerta-sem-venda' toda hora no minuto 47 (e-mail ao Lucas, 1 aviso por queda). Aplicado direto no banco.

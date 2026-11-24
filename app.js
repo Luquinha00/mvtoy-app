@@ -168,6 +168,7 @@ const parcial=()=>MES===mesAtual()?'<span class="st y">mês em andamento</span>'
 function alertas(){const A=[];const hoje=new Date(hojeISO()+'T12:00:00');const mf=ultimoMesFechado();
   D.maquinas.filter(m=>m.status==='Ativa').forEach(m=>{
     if(m.tel_ultimo){const hs=Math.floor((Date.now()-new Date(m.tel_ultimo).getTime())/36e5);if(hs>=30)A.push({n:3,m,t:`desligada ou sem internet há ${hs>=48?Math.floor(hs/24)+' dias':hs+' horas'} (sem sinal da placa)`})}
+    if(m.ultima_venda){const ds=Math.floor((Date.now()-new Date(m.ultima_venda).getTime())/864e5);if(ds>=2)A.push({n:3,m,t:`sem faturamento há ${ds} dias`})}
     const x=lucro(m,mf);if(x&&x.rec>0&&x.lucro<0)A.push({n:2,m,t:`deu prejuízo em ${nomeMes(mf)} (${brl(x.lucro)}) — não pagou o ponto`});
     else if(x&&num(m.comissao_fixa)>0&&x.rec<num(m.comissao_fixa))A.push({n:2,m,t:`faturou ${brl(x.rec)} em ${nomeMes(mf)}, menos que o aluguel fixo (${brl0(m.comissao_fixa)})`});
     if(!semPremio(m)){const d=m.ultima_visita?Math.round((hoje-new Date(String(m.ultima_visita).slice(0,10)+'T12:00:00'))/864e5):null;
@@ -179,7 +180,7 @@ function alertas(){const A=[];const hoje=new Date(hojeISO()+'T12:00:00');const m
   return A.sort((a,b)=>b.n-a.n)}
 function cardAlertas(){if(!D.pode.editar)return '';const A=alertas();if(!A.length)return '<div class="card"><h2>Alertas</h2><p class="sub">Nada pedindo atenção agora.</p></div>';
   const cor=['','y','off','off'];
-  return `<div class="card"><h2>Alertas <span class="sub">${A.length} item(ns)</span></h2><table>${A.slice(0,15).map(a=>`<tr ${a.m?`class="clic" data-cod="${a.m.codigo}"`:''}><td>${a.m?`<span class="mvt">${a.m.codigo}</span><small>${esc(a.m.tipo)} · ${esc((localDe(a.m)||{}).nome||a.m.ponto)}</small>`:`<b>${esc(a.l.nome)}</b>`}</td><td><span class="st ${cor[a.n]}">${a.n===3?'desligada':a.n===2?'dinheiro':a.n===1?'operação':'cadastro'}</span> ${a.t}</td></tr>`).join('')}</table>${A.length>15?`<p class="mini">+ ${A.length-15} outros.</p>`:''}</div>`}
+  return `<div class="card"><h2>Alertas <span class="sub">${A.length} item(ns)</span></h2><table>${A.slice(0,15).map(a=>`<tr ${a.m?`class="clic" data-cod="${a.m.codigo}"`:''}><td>${a.m?`<span class="mvt">${a.m.codigo}</span><small>${esc(a.m.tipo)} · ${esc((localDe(a.m)||{}).nome||a.m.ponto)}</small>`:`<b>${esc(a.l.nome)}</b>`}</td><td><span class="st ${cor[a.n]}">${a.n===3?(a.t.startsWith('sem fat')?'sem venda':'desligada'):a.n===2?'dinheiro':a.n===1?'operação':'cadastro'}</span> ${a.t}</td></tr>`).join('')}</table>${A.length>15?`<p class="mini">+ ${A.length-15} outros.</p>`:''}</div>`}
 function telaInicio(){
   if(!D.maquinas.length){vazio('Olá, '+esc(D.eu.nome)+'! Ainda não há máquinas ligadas ao seu acesso.<br>Fale com a MV Toy para liberar.');return}
   if(!D.pode.dinheiro)return telaRota('inicio');
