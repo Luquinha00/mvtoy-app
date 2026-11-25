@@ -55,6 +55,8 @@ function custoLocal(m,mes){let t=0;const det=[];
     const n=c.codigo?1:(D.maquinas.filter(x=>doLocal(x,c)&&x.status!=='Em estoque').length||1);const v=num(c.valor)/n;t+=v;det.push(c.nome+(n>1?' ÷ '+n:''))});
   return {v:Math.round(t*100)/100,det:det.join(' · ')}}
 const saidaMes=(m,mes)=>(m.saidas||[]).find(x=>String(x.mes).slice(0,10)===mes);
+const REGIME_TXT={simples:'Simples Nacional',mei:'MEI',presumido:'Lucro Presumido',real:'Lucro Real'};
+function fiscalDe(m){const F=D.fiscal||[];return m.franqueado_id?F.find(f=>f.entidade_id===m.franqueado_id):F.find(f=>f.tipo==='franqueadora')}
 function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l=leit(m,mes),cont=dinheiroContado(m,mes);
   const sm=saidaMes(m,mes);const ps=sm&&num(sm.qtd)>0?{qtd:num(sm.qtd),fonte:'contagem por produto'}:premiosSaidos(m,mes),cp=custoPremio(m),lm=lancMes(mes,m.codigo);
   const lancPremio=lm.filter(x=>x.tipo==='saida'&&x.categoria===CAT_PREMIO).reduce((s,x)=>s+num(x.valor),0);
@@ -66,8 +68,10 @@ function lucro(m,mes){const rec=receita(m,mes);if(rec===null)return null;const l
   const loc=custoLocal(m,mes);
   const taxa=taxaLanc||!l?0:Math.round((num(l.debito)*TAXA.debito+num(l.credito)*TAXA.credito+num(l.pix)*TAXA.pix)*100)/100;
   const ent=lm.filter(x=>x.tipo==='entrada').reduce((s,x)=>s+num(x.valor),0);
-  return {rec,eletr:l?num(l.faturamento)-num(l.dinheiro):0,dinTel:l?num(l.dinheiro):null,dinCont:cont,ps,cp,custoP,devida,pagaCom,com,outras,ent,taxa,local:loc.v,localDet:loc.det,
-    lucro:rec-(custoP||0)-com-outras-taxa-loc.v+ent,semCusto:custoP===null,semComissao:!num(m.comissao_pct)&&!num(m.comissao_fixa)&&!pagaCom}}
+  const impLanc=lm.some(x=>x.tipo==='saida'&&x.categoria==='Impostos');const fx=fiscalDe(m);
+  const imp=impLanc||!fx?0:Math.round(rec*num(fx.aliq_maquinas)*100)/100;
+  return {imp,impTxt:fx?(REGIME_TXT[fx.regime]||fx.regime)+(fx.regime==='mei'?' · DAS fixo':' · '+(num(fx.aliq_maquinas)*100).toFixed(2).replace('.',',')+'%'):'',rec,eletr:l?num(l.faturamento)-num(l.dinheiro):0,dinTel:l?num(l.dinheiro):null,dinCont:cont,ps,cp,custoP,devida,pagaCom,com,outras,ent,taxa,local:loc.v,localDet:loc.det,
+    lucro:rec-(custoP||0)-com-outras-taxa-loc.v-imp+ent,semCusto:custoP===null,semComissao:!num(m.comissao_pct)&&!num(m.comissao_fixa)&&!pagaCom}}
 function lucroRede(mes){let t=0,rec=0,falta=0;D.maquinas.forEach(m=>{const x=lucro(m,mes);if(x){t+=x.lucro;rec+=x.rec;if(x.semCusto)falta++}});
   const ger=lancMes(mes).filter(l=>!l.codigo);t+=ger.filter(l=>l.tipo==='entrada').reduce((s,l)=>s+num(l.valor),0)-ger.filter(l=>l.tipo==='saida').reduce((s,l)=>s+num(l.valor),0);
   return {lucro:t,rec,falta}}
@@ -146,7 +150,7 @@ function topo(){
   $('#btnSair').onclick=sair;
   const t=[['inicio','Início']];if(D.pode.dinheiro)t.push(['maquinas','Máquinas']);
   if(D.pode.dinheiro)t.push(['financeiro','Financeiro']);if(D.pode.editar&&D.locais)t.push(['locais','Locais']);
-  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel))t.push(['placas','Conecta']);if(D.pode.acessos)t.push(['notas','Notas fiscais']);if(D.pode.acessos)t.push(['acessos','Acessos']);
+  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel))t.push(['placas','Conecta']);if(D.pode.acessos)t.push(['notas','Fiscal e notas']);if(D.pode.acessos)t.push(['acessos','Acessos']);
   const tabs=$('#tabs');tabs.style.display='';tabs.innerHTML=t.map(([k,n])=>`<a href="#${k}" data-k="${k}">${n}</a>`).join('')}
 function rota(){if(!D)return;const h=decodeURIComponent(location.hash.slice(1))||'inicio';
   const k=h.startsWith('m/')?'maquinas':h;document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));
@@ -274,6 +278,7 @@ function linhasLucro(x){const L=(t,v,cl,sub)=>`<tr><td>${t}${sub?`<small>${sub}<
   ${L('− Comissão / aluguel do ponto',brl(x.com),'color:var(--rt)',x.pagaCom?`paga (devida pelo combinado: ${brl(x.devida)})`:x.devida?'devida pelo combinado (ainda não lançada como paga)':'comissão não cadastrada')}
   ${x.taxa?L('− Taxa da maquininha',brl(x.taxa),'color:var(--rt)','débito 0,99% · crédito 2,99% sobre o que entrou no cartão'):''}
   ${x.local?L('− Custos fixos (local e máquina)',brl(x.local),'color:var(--rt)',esc(x.localDet)):''}
+  ${x.imp?L('− Imposto estimado',brl(x.imp),'color:var(--rt)',esc(x.impTxt)):''}
   ${x.outras?L('− Outras despesas da máquina',brl(x.outras),'color:var(--rt)'):''}${x.ent?L('+ Outras entradas',brl(x.ent),'color:var(--vd)'):''}
   ${L('<b>Lucro da máquina</b>','<b>'+brl(x.lucro)+'</b>',x.lucro>=0?'color:var(--vd)':'color:var(--rt)')}</table>`}
 function telaMaquina(cod){const m=maq(cod);if(!m){vazio('Máquina não encontrada no seu acesso. <a href="#maquinas">Voltar</a>');return}
@@ -786,10 +791,26 @@ async function telaNotas(){
   $('#app').innerHTML='<div class="card"><p class="sub">Carregando notas…</p></div>';
   let r;try{r=await rpc('mvt_admin_nf_dados',{p_sessao:S()})}catch(_){vazio('Não foi possível carregar as notas agora.');return}
   if(r.erro){vazio(esc(r.erro));return}NF=r;const N=r.notas||[],E=r.entidades||[];
+  let FX={resumo:[]};try{FX=await rpc('mvt_admin_fiscal',{p_sessao:S(),p_mes:MES})}catch(_){}
+  const pct=v=>(num(v)*100).toFixed(2).replace('.',',')+'%';
+  const cardFiscal=`<div class="card"><h2>Imposto estimado · ${nomeMes(MES.slice(0,7))} <span class="sub">estimativa para gestão — o contador confirma</span></h2>
+   ${(FX.resumo||[]).length?`<div class="wrap"><table><tr><th>Quem</th><th>Regime</th><th class="r">Faturamento do mês</th><th class="r">Últimos 12 meses</th><th class="r">Alíquota</th><th class="r">Imposto</th></tr>
+   ${FX.resumo.map(f=>`<tr><td><b>${esc(f.nome)}</b><small>${TIPO_ENT[f.tipo]}</small></td><td>${REGIME_TXT[f.regime]||f.regime}${f.regime==='simples'?`<small>máquinas Anexo ${f.anexo_maquinas}${num(f.receita_royalties)?' · royalties Anexo '+f.anexo_royalties:''}</small>`:''}</td>
+     <td class="r">${brl(num(f.receita_maquinas)+num(f.receita_royalties))}${num(f.receita_royalties)?`<small>royalties ${brl(f.receita_royalties)}</small>`:''}</td>
+     <td class="r">${brl0(f.rbt12)}${f.obs?`<small>${esc(f.obs)}</small>`:''}</td>
+     <td class="r">${f.regime==='mei'?'DAS fixo':pct(f.aliq_maquinas)+(num(f.receita_royalties)?`<small>royalties ${pct(f.aliq_royalties)}</small>`:'')}</td>
+     <td class="r"><b>${brl(f.imposto)}</b></td></tr>
+     ${(f.alertas||[]).map(a=>`<tr><td colspan="6"><span class="st y">atenção</span> ${esc(a)}</td></tr>`).join('')}`).join('')}</table></div>`
+   :'<p class="sub">Cadastre a franqueadora e os franqueados (com o regime) em Cadastros fiscais para o app calcular o imposto.</p>'}
+   <details style="margin-top:8px"><summary class="mini">Regras usadas</summary><ul class="mini">
+    <li><b>MEI:</b> DAS fixo (R$ 86,05 serviço · R$ 82,05 comércio · R$ 87,05 os dois, 2026); limite R$ 81 mil/ano. Passou até 20%: vira ME no ano seguinte; passou mais de 20%: desenquadra desde janeiro. MEI não pode ser franqueadora.</li>
+    <li><b>Simples:</b> alíquota efetiva pelo faturamento dos últimos 12 meses. Máquinas de diversão (CNAE 9329-8/04) no Anexo III; royalties (7740-3/00) no Anexo V, ou III se a folha + pró-labore for 28% ou mais do faturamento (Fator R). Teto R$ 4,8 mi; acima de R$ 3,6 mi o ISS sai da guia.</li>
+    <li><b>Lucro Presumido:</b> serviços ≈ 11,33% (IRPJ, CSLL, PIS, Cofins) + ISS da cidade, sem contar INSS da folha.</li>
+    <li>O imposto entra no lucro de cada máquina (Financeiro e ficha). Se houver lançamento "Impostos" no mês da máquina, vale o lançado.</li></ul></details></div>`;
   const c=s=>N.filter(n=>n.status===s).length;const fr=E.find(e=>e.tipo==='franqueadora');
   const sv=(r.regras||{}).servico_franquia||{};const faltaRegra=sv.iss_pct==null||!sv.codigo_municipal;
   const mesAnt=(()=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7)})();
-  $('#app').innerHTML=`<div class="kpis">
+  $('#app').innerHTML=cardFiscal+`<div class="kpis">
     <div class="kpi"><div class="l">Rascunho</div><div class="v">${c('rascunho')}</div><div class="s">conferir e aprovar</div></div>
     <div class="kpi"><div class="l">Aprovadas</div><div class="v">${c('aprovada')}</div><div class="s">prontas para enviar</div></div>
     <div class="kpi g"><div class="l">Emitidas</div><div class="v">${c('emitida')}</div><div class="s">${c('agendada')} aguardando prefeitura/Sefaz</div></div>
@@ -836,6 +857,8 @@ function formEntidade(x){const novo=!x;x=x||{tipo:'franqueado',nome:'',razao_soc
    <div><label>Nome</label><input id="eNm" required value="${esc(x.nome)}"></div>
    <div><label>Razão social</label><input id="eRz" value="${esc(x.razao_social||'')}"></div>
    <div class="lin"><div><label>CNPJ ou CPF</label><input id="eDc" inputmode="numeric" value="${esc(x.documento||'')}"></div><div><label>Regime</label><select id="eRg">${op({simples:'Simples Nacional',mei:'MEI',presumido:'Lucro Presumido',real:'Lucro Real'},x.regime)}</select></div></div>
+   <div class="lin" id="eFisc"><div id="eFolW"><label>Folha + pró-labore por mês (R$)</label><input id="eFol" type="number" step="0.01" min="0" value="${esc(x.folha_mensal||'')}"></div><div id="eAnxW"><label>Anexo das máquinas</label><select id="eAnx">${op({III:'III (diversão/jogos)',I:'I (venda de produto)',V:'V'},x.anexo_maquinas||'III')}</select></div><div id="eMeiW"><label>DAS MEI</label><select id="eMei">${op({servico:'Serviço',comercio:'Comércio',ambos:'Os dois'},x.mei_tipo||'servico')}</select></div><div id="eIssW"><label>ISS % (Presumido)</label><input id="eIss" type="number" step="0.01" min="0" max="5" value="${esc(x.iss_pct||'')}"></div></div>
+   <p class="mini" id="eRegra"></p>
    <div class="lin"><div><label>Inscrição municipal</label><input id="eIm" value="${esc(x.inscricao_municipal||'')}"></div><div><label>Inscrição estadual</label><input id="eIe" value="${esc(x.inscricao_estadual||'')}"></div></div>
    <div><label>E-mail para receber a nota</label><input id="eEm" type="email" value="${esc(x.email_nf||'')}"></div>
    <div class="lin"><div><label>CEP</label><input id="eCep" value="${esc(en.cep||'')}"></div><div><label>Cidade/UF</label><input id="eCid" value="${esc([en.cidade,en.uf].filter(Boolean).join('/'))}" placeholder="Araraquara/SP"></div></div>
@@ -845,11 +868,13 @@ function formEntidade(x){const novo=!x;x=x||{tipo:'franqueado',nome:'',razao_soc
    <div class="lin"><div><label>Emite nota pelo app?</label><select id="eEmt"><option value="0">Não</option><option value="1" ${x.emite?'selected':''}>Sim</option></select></div><div><label>Ambiente</label><select id="eAmb">${op({homologacao:'Teste (homologação)',producao:'Produção'},x.ambiente)}</select></div></div>
    <div class="lin"><div><label>Situação</label><select id="eAt"><option value="1">Ativo</option><option value="0" ${x.ativo?'':'selected'}>Inativo</option></select></div><div><label>Obs.</label><input id="eOb" value="${esc(x.obs||'')}"></div></div>
    <p class="mini" id="eMsg"></p><div class="lin"><button class="btn">Salvar</button><button type="button" class="btn sec" data-fechar>Fechar</button></div></form>`,w=>{
-   const g=id=>w.querySelector(id).value;const vis=()=>{w.querySelector('#eLocW').style.display=g('#eTp')==='comercio'?'':'none';w.querySelector('#eMaqW').style.display=g('#eTp')==='franqueado'?'':'none'};vis();w.querySelector('#eTp').onchange=vis;
+   const g=id=>w.querySelector(id).value;const REG={mei:'MEI: imposto fixo no DAS; limite R$ 81 mil/ano; pode explorar fliperama/jogos (9329-8/04) mas não pode ser franqueadora nem ter sócio. Acima do limite vira ME.',simples:'Simples: alíquota pela faixa de faturamento dos últimos 12 meses; máquinas no Anexo III; royalties no Anexo V (III com Fator R ≥ 28%).',presumido:'Lucro Presumido: ~11,33% + ISS sobre serviços, mais INSS de 20% sobre a folha.',real:'Lucro Real: imposto sobre o lucro de verdade — só com o contador.'};
+   const visF=()=>{const rg=g('#eRg');w.querySelector('#eFolW').style.display=rg==='simples'?'':'none';w.querySelector('#eAnxW').style.display=rg==='simples'?'':'none';w.querySelector('#eMeiW').style.display=rg==='mei'?'':'none';w.querySelector('#eIssW').style.display=rg==='presumido'?'':'none';w.querySelector('#eRegra').textContent=REG[rg]||''};visF();w.querySelector('#eRg').onchange=visF;
+   const vis=()=>{w.querySelector('#eLocW').style.display=g('#eTp')==='comercio'?'':'none';w.querySelector('#eMaqW').style.display=g('#eTp')==='franqueado'?'':'none'};vis();w.querySelector('#eTp').onchange=vis;
    w.querySelector('#ffe').onsubmit=async e=>{e.preventDefault();const [cid,uf]=g('#eCid').split('/').map(s=>s&&s.trim());const [nro,bai]=g('#eNb').split('/').map(s=>s&&s.trim());
     const dados={tipo:g('#eTp'),nome:g('#eNm'),razao_social:g('#eRz'),documento:g('#eDc'),regime:g('#eRg'),inscricao_municipal:g('#eIm'),inscricao_estadual:g('#eIe'),email_nf:g('#eEm'),
       endereco:{cep:g('#eCep').replace(/\D/g,''),cidade:cid||'',uf:(uf||'').toUpperCase(),logradouro:g('#eRua'),numero:nro||'',bairro:bai||''},marca:g('#eMc'),local_id:g('#eTp')==='comercio'?g('#eLoc'):'',
-      emite:g('#eEmt')==='1',provedor_nfse:g('#eTp')==='franqueadora'?'asaas':(g('#eEmt')==='1'?'focus':''),provedor_nfe:g('#eEmt')==='1'?'focus':'',ambiente:g('#eAmb'),ativo:g('#eAt')==='1',obs:g('#eOb')};
+      emite:g('#eEmt')==='1',provedor_nfse:g('#eTp')==='franqueadora'?'asaas':(g('#eEmt')==='1'?'focus':''),provedor_nfe:g('#eEmt')==='1'?'focus':'',ambiente:g('#eAmb'),ativo:g('#eAt')==='1',obs:g('#eOb'),folha_mensal:g('#eFol'),anexo_maquinas:g('#eAnx'),mei_tipo:g('#eMei'),iss_pct:g('#eIss')};
     const d=await rpc('mvt_admin_fiscal_entidade',{p_sessao:S(),p_id:novo?null:x.id,p_dados:dados});if(d.erro){w.querySelector('#eMsg').textContent=d.erro;return}
     if(dados.tipo==='franqueado'){const marc=[...w.querySelectorAll('[data-emq]:checked')].map(i=>i.dataset.emq);const tirar=minhas.filter(c=>!marc.includes(c));
       if(tirar.length){const t=await rpc('mvt_admin_maquina_franqueado',{p_sessao:S(),p_codigos:tirar,p_franqueado:null});if(t.erro){w.querySelector('#eMsg').textContent=t.erro;return}}
