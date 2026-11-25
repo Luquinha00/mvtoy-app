@@ -810,7 +810,21 @@ async function telaNotas(){
   const c=s=>N.filter(n=>n.status===s).length;const fr=E.find(e=>e.tipo==='franqueadora');
   const emis=E.filter(e=>e.emite&&e.ativo);const faltaRegra=false;
   const mesAnt=(()=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7)})();
-  $('#app').innerHTML=cardFiscal+`<div class="kpis">
+  let CB={contas:[],cobrancas:[],resumo:{}};try{CB=await rpc('mvt_admin_cobrancas',{p_sessao:S()})}catch(_){}
+  const ST_CB={criada:['y','a registrar'],ativa:['y','aguardando pagamento'],paga:['','paga'],cancelada:['off','cancelada'],erro:['off','erro']};
+  const cardCob=`<div class="card"><h2>Recebimentos de franquia <span class="sub">Pix com vencimento direto na conta · sem tarifa no C6</span><button class="btn acao" id="cbTeste">Testar conta</button></h2>
+   <div class="kpis"><div class="kpi g"><div class="l">Recebido no mês</div><div class="v">${brl((CB.resumo||{}).recebido_mes)}</div><div class="s">royalties, taxa e fundo</div></div>
+    <div class="kpi"><div class="l">Em aberto</div><div class="v">${brl((CB.resumo||{}).em_aberto)}</div></div>
+    <div class="kpi ${num((CB.resumo||{}).vencido)?'r':''}"><div class="l">Vencido</div><div class="v">${brl((CB.resumo||{}).vencido)}</div></div></div>
+   <p class="mini">Contas: ${(CB.contas||[]).map(c=>`<a href="#" data-cbconta="${c.id}">${esc(c.nome)}</a> <small>(${c.ambiente==='producao'?'produção':'teste'}${c.chave_pix?'':' · falta chave Pix'}${c.marcas&&c.marcas.length?' · '+esc(c.marcas.join(', ')):' · todas as marcas'})</small>`).join(' · ')||'nenhuma'} · <a href="#" data-cbconta="">+ conta</a></p>
+   <div class="acoes" style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0"><button class="btn" id="cbGerar">Gerar cobrança das notas marcadas</button><button class="btn" id="cbEnviar">Registrar no banco e conferir pagamentos</button></div><p class="mini" id="cbMsg"></p><div id="cbRes"></div>
+   <div class="wrap"><table><tr><th>Cobrança</th><th>Pagador</th><th class="r">Valor</th><th>Situação</th><th></th></tr>
+   ${(CB.cobrancas||[]).map(c=>`<tr><td><b>${NAT_NF[c.natureza]||esc(c.natureza||'')}</b> <small>${esc(c.marca)} · vence ${dataBR(c.vencimento)}</small></td><td>${esc(c.pagador)}</td>
+     <td class="r">${brl(c.valor)}${c.valor_pago?`<small>pago ${brl(c.valor_pago)}</small>`:''}</td>
+     <td><span class="st ${(ST_CB[c.status]||['',''])[0]}">${(ST_CB[c.status]||['',c.status])[1]}</span>${c.pago_em?`<small>${dataBR(String(c.pago_em).slice(0,10))}</small>`:''}${c.erro_msg?`<small style="color:var(--rt)">${esc(c.erro_msg)}</small>`:''}</td>
+     <td>${c.pix_copia_cola&&c.status==='ativa'?`<a href="#" data-cbpix="${c.id}">Copiar Pix</a> `:''}${['criada','ativa','erro'].includes(c.status)?`<a href="#" data-cbbaixa="${c.id}">Baixa manual</a> <a href="#" data-cbcanc="${c.id}">Cancelar</a>`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="sub">Nenhuma cobrança ainda. Marque notas de royalties/taxa/fundo abaixo e gere.</td></tr>'}</table></div>
+   <p class="mini">A baixa é automática: o app confere cada pagamento direto na API do banco. Credenciais do banco ficam só nos segredos do servidor.</p></div>`;
+  $('#app').innerHTML=cardFiscal+cardCob+`<div class="kpis">
     <div class="kpi"><div class="l">Rascunho</div><div class="v">${c('rascunho')}</div><div class="s">conferir e aprovar</div></div>
     <div class="kpi"><div class="l">Aprovadas</div><div class="v">${c('aprovada')}</div><div class="s">prontas para enviar</div></div>
     <div class="kpi g"><div class="l">Emitidas</div><div class="v">${c('emitida')}</div><div class="s">${c('agendada')} aguardando prefeitura/Sefaz</div></div>
@@ -850,6 +864,31 @@ async function telaNotas(){
       $('#nfMsg').textContent=x.enviadas?`${x.enviadas} processada(s).`+(pend.length?' '+pend[0].pendente:''):'Nenhuma nota aprovada para enviar.';setTimeout(telaNotas,1500)}
     catch(_){$('#nfMsg').textContent='Sem conexão com o servidor agora.'}};
   $('#nfNova').onclick=()=>formNota();
+  const cf=(q)=>fetch(URL_SB+'/functions/v1/cobranca-c6'+q,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({sessao:S()})}).then(r=>r.json());
+  $('#cbGerar').onclick=async()=>{const ids=marcadas();if(!ids.length){$('#cbMsg').textContent='Marque as notas de royalties/taxa/fundo na lista de notas.';return}
+    const d=await rpc('mvt_admin_cobranca_gerar',{p_sessao:S(),p_notas:ids});$('#cbMsg').textContent=d.erro||`${d.criadas} cobrança(s) criada(s)${d.puladas?` · ${d.puladas} já tinham cobrança`:''}. Agora toque em "Registrar no banco".`;if(!d.erro&&d.criadas)setTimeout(telaNotas,900)};
+  $('#cbEnviar').onclick=async()=>{$('#cbMsg').textContent='Falando com o banco…';try{const x=await cf('');
+    $('#cbMsg').textContent=x.erro||`${x.registradas} registrada(s) · ${x.pagas} paga(s) agora`+((x.erros||[]).length?` · ${x.erros[0]}`:'');setTimeout(telaNotas,1500)}catch(_){$('#cbMsg').textContent='Sem conexão com o servidor agora.'}};
+  $('#cbTeste').onclick=async()=>{$('#cbRes').innerHTML='<p class="mini">Testando…</p>';try{const x=await cf('?acao=teste');
+    $('#cbRes').innerHTML=x.erro?`<p class="mini">${esc(x.erro)}</p>`:(x.contas||[]).map(c=>`<p class="mini"><b>${esc(c.conta)}</b> (${c.ambiente==='producao'?'produção':'teste'}): ${c.login?'<span class="st">login ok</span> · chave Pix '+c.chave_pix:'<span class="st off">'+esc(c.erro)+'</span>'}</p>`).join('')}catch(_){$('#cbRes').innerHTML='<p class="mini">Sem conexão.</p>'}};
+  document.querySelectorAll('[data-cbpix]').forEach(a=>a.onclick=e=>{e.preventDefault();const c=CB.cobrancas.find(x=>x.id===a.dataset.cbpix);navigator.clipboard&&navigator.clipboard.writeText(c.pix_copia_cola);a.textContent='Copiado!'});
+  document.querySelectorAll('[data-cbbaixa]').forEach(a=>a.onclick=async e=>{e.preventDefault();if(!confirm('Dar baixa manual (pagamento conferido fora do app)?'))return;const d=await rpc('mvt_admin_cobranca_acao',{p_sessao:S(),p_id:a.dataset.cbbaixa,p_acao:'baixa_manual'});if(d.erro)alert(d.erro);else telaNotas()});
+  document.querySelectorAll('[data-cbcanc]').forEach(a=>a.onclick=async e=>{e.preventDefault();if(!confirm('Cancelar esta cobrança?'))return;const c=CB.cobrancas.find(x=>x.id===a.dataset.cbcanc);
+    const d=c.status==='ativa'?await cf('?acao=cancelar&id='+c.id):await rpc('mvt_admin_cobranca_acao',{p_sessao:S(),p_id:c.id,p_acao:'cancelar'});if(d.erro)alert(d.erro);else telaNotas()});
+  document.querySelectorAll('[data-cbconta]').forEach(a=>a.onclick=e=>{e.preventDefault();const x=CB.contas.find(c=>c.id===a.dataset.cbconta)||{nome:'',banco:'c6',ambiente:'sandbox',chave_pix:'',segredo_prefixo:'',marcas:[],ativo:true};
+    const op=(o,v)=>Object.entries(o).map(([k,n])=>`<option value="${k}" ${k===v?'selected':''}>${n}</option>`).join('');
+    modal(`<h3>${x.id?'Conta de recebimento':'Nova conta de recebimento'}</h3><form class="form" id="fcr">
+     <div><label>Nome</label><input id="crN" required value="${esc(x.nome)}" placeholder="C6 · Mundo Virtual Franchising"></div>
+     <div class="lin"><div><label>Banco</label><select id="crB">${op({c6:'C6 Bank',inter:'Inter (em breve)',pagbank:'PagBank (em breve)',itau:'Itaú (em breve)',bb:'Banco do Brasil (em breve)',sicoob:'Sicoob (em breve)',outro:'Outro'},x.banco)}</select></div>
+      <div><label>Ambiente</label><select id="crA">${op({sandbox:'Teste',producao:'Produção'},x.ambiente)}</select></div></div>
+     <div><label>Chave Pix da conta (aleatória)</label><input id="crK" value="${esc(x.chave_pix||'')}"></div>
+     <div class="lin"><div><label>Prefixo dos segredos</label><input id="crP" required value="${esc(x.segredo_prefixo||'')}" placeholder="C6_MVF"></div>
+      <div><label>Marcas (vazio = todas)</label><input id="crM" value="${esc((x.marcas||[]).join(', '))}" placeholder="MV Toy, Mini Loja MV"></div></div>
+     <p class="mini">No servidor ficam só: PREFIXO_CLIENT_ID, PREFIXO_CLIENT_SECRET, PREFIXO_CERT e PREFIXO_KEY. Nada disso fica no app.</p>
+     <p class="mini" id="crMsg"></p><div class="lin"><button class="btn">Salvar</button><button type="button" class="btn sec" data-fechar>Fechar</button></div></form>`,w=>{
+     w.querySelector('#fcr').onsubmit=async ev=>{ev.preventDefault();const g=i=>w.querySelector(i).value;
+       const d=await rpc('mvt_admin_conta_receb',{p_sessao:S(),p_id:x.id||null,p_dados:{nome:g('#crN'),banco:g('#crB'),ambiente:g('#crA'),chave_pix:g('#crK'),segredo_prefixo:g('#crP'),marcas:g('#crM').split(',').map(t=>t.trim()).filter(Boolean),ativo:true}});
+       if(d.erro){w.querySelector('#crMsg').textContent=d.erro;return}w.remove();telaNotas()}})});
   const ef=(q,b)=>fetch(URL_SB+'/functions/v1/nf-emitir'+q,{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({sessao:S()})});
   $('#nfTeste').onclick=async()=>{const o=$('#nfTesteRes');o.innerHTML='<p class="mini">Testando certificado e conexão com Receita e Sefaz…</p>';
     try{const x=await ef('?teste=1').then(r=>r.json());if(x.erro){o.innerHTML=`<p class="mini">${esc(x.erro)}</p>`;return}
