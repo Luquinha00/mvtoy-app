@@ -146,16 +146,16 @@ function topo(){
   $('#btnSair').onclick=sair;
   const t=[['inicio','Início']];if(D.pode.dinheiro)t.push(['maquinas','Máquinas']);
   if(D.pode.dinheiro)t.push(['financeiro','Financeiro']);if(D.pode.editar&&D.locais)t.push(['locais','Locais']);
-  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel))t.push(['placas','Conecta']);if(D.pode.acessos)t.push(['acessos','Acessos']);
+  t.push(['visitas','Visitas']);if(D.pode.estoque)t.push(['estoque','Estoque']);if(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel))t.push(['placas','Conecta']);if(D.pode.acessos)t.push(['notas','Notas fiscais']);if(D.pode.acessos)t.push(['acessos','Acessos']);
   const tabs=$('#tabs');tabs.style.display='';tabs.innerHTML=t.map(([k,n])=>`<a href="#${k}" data-k="${k}">${n}</a>`).join('')}
 function rota(){if(!D)return;const h=decodeURIComponent(location.hash.slice(1))||'inicio';
   const k=h.startsWith('m/')?'maquinas':h;document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));
   window.scrollTo(0,0);
   if(h.startsWith('m/'))return telaMaquina(h.slice(2));
   if(h==='placas'&&!(D.pode.acessos||['franqueado','cliente_telemetria'].includes(D.eu.papel)))return telaInicio();
-  if(h==='acessos'&&!D.pode.acessos)return telaInicio();
+  if((h==='acessos'||h==='notas')&&!D.pode.acessos)return telaInicio();
   if(h==='locais'&&!(D.pode.editar&&D.locais))return telaInicio();
-  ({locais:telaLocais,inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,estoque:telaEstoque,placas:telaPlacas,acessos:telaAcessos}[h]||telaInicio)()}
+  ({locais:telaLocais,inicio:telaInicio,maquinas:telaMaquinas,financeiro:telaFinanceiro,visitas:telaVisitas,estoque:telaEstoque,placas:telaPlacas,acessos:telaAcessos,notas:telaNotas}[h]||telaInicio)()}
 window.addEventListener('hashchange',rota);
 function seletorMes(){const ms=mesesComDado().slice(-13);
   return `<div class="meses">${ms.map(m=>`<button data-mes="${m}" class="${m===MES?'on':''}">${nomeMes(m)}${m===mesAtual()?' •':''}</button>`).join('')}</div>`}
@@ -772,3 +772,104 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
   if(/iphone|ipad|ipod/i.test(navigator.userAgent)){txt.innerHTML='<b>Instale o app MV Toy</b><br>No Safari, toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>.';btn.style.display='none';box.classList.add('on')}
   window.addEventListener('appinstalled',()=>box.classList.remove('on'));
 })();
+
+// ---------- notas fiscais (C-0485) ----------
+// franqueadora → franqueado: NFS-e pelo Asaas (taxa, royalties, fundo) · NF-e (mercadoria) e franqueado → comércio (consignação/venda) pela API fiscal.
+// O app só monta e aprova; quem emite é a função nf-emitir (chaves ficam nos segredos do servidor, nunca aqui).
+const NAT_NF={taxa_franquia:'Taxa de franquia',royalties:'Royalties',fundo_marketing:'Fundo de Marketing',venda_mercadoria:'Venda de mercadoria',
+  remessa_consignacao:'Remessa em consignação',venda_consignacao:'Venda da consignação',venda_comercio:'Venda ao comércio',outro:'Outro'};
+const ST_NF={rascunho:['y','rascunho'],aprovada:['','aprovada'],enviando:['y','enviando'],agendada:['y','na prefeitura/Sefaz'],emitida:['','emitida'],erro:['off','erro'],cancelada:['off','cancelada']};
+const TIPO_ENT={franqueadora:'Franqueadora',franqueado:'Franqueado',comercio:'Comércio'};
+let NF=null;
+const docBR=d=>!d?'—':d.length===14?d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');
+async function telaNotas(){
+  $('#app').innerHTML='<div class="card"><p class="sub">Carregando notas…</p></div>';
+  let r;try{r=await rpc('mvt_admin_nf_dados',{p_sessao:S()})}catch(_){vazio('Não foi possível carregar as notas agora.');return}
+  if(r.erro){vazio(esc(r.erro));return}NF=r;const N=r.notas||[],E=r.entidades||[];
+  const c=s=>N.filter(n=>n.status===s).length;const fr=E.find(e=>e.tipo==='franqueadora');
+  const sv=(r.regras||{}).servico_franquia||{};const faltaRegra=sv.iss_pct==null||!sv.codigo_municipal;
+  const mesAnt=(()=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7)})();
+  $('#app').innerHTML=`<div class="kpis">
+    <div class="kpi"><div class="l">Rascunho</div><div class="v">${c('rascunho')}</div><div class="s">conferir e aprovar</div></div>
+    <div class="kpi"><div class="l">Aprovadas</div><div class="v">${c('aprovada')}</div><div class="s">prontas para enviar</div></div>
+    <div class="kpi g"><div class="l">Emitidas</div><div class="v">${c('emitida')}</div><div class="s">${c('agendada')} aguardando prefeitura/Sefaz</div></div>
+    <div class="kpi ${c('erro')?'r':''}"><div class="l">Com erro</div><div class="v">${c('erro')}</div><div class="s">ver motivo na lista</div></div></div>
+   ${!fr||faltaRegra?`<div class="card"><h2>Antes de emitir</h2><table>
+     ${!fr?'<tr><td><span class="st y">falta</span> Cadastrar a <b>franqueadora</b> (CNPJ, inscrição municipal, e-mail) em Cadastros fiscais.</td></tr>':''}
+     ${faltaRegra?'<tr><td><span class="st y">contador</span> Código do serviço de franquia na prefeitura e alíquota de ISS (item 17.08 da LC 116) — sem isso o servidor não manda nota.</td></tr>':''}
+     <tr><td><span class="st y">Lucas</span> Chave do Asaas (NFS-e) e contrato da API de NF-e ficam nos segredos do servidor — pedido na Fila de aprovações.</td></tr></table></div>`:''}
+   <div class="card"><h2>Fechamento de royalties</h2><p class="sub">Soma o faturamento do mês de cada máquina ligada a um franqueado e cria as notas de <b>royalties (${Math.round(((r.regras||{}).royalties_pct||0.04)*100)}%)</b> e <b>Fundo de Marketing (${Math.round(((r.regras||{}).fundo_pct||0.02)*100)}%)</b> em rascunho, com vencimento no dia ${(r.regras||{}).dia_vencimento||10}. Rodar de novo não duplica.</p>
+    <form class="form" id="fFech" style="margin-top:8px"><div class="lin"><div><label>Mês</label><input type="month" id="fMes" value="${mesAnt}"></div><div style="align-self:end"><button class="btn">Gerar notas do mês</button></div></div><p class="mini" id="fMsg"></p></form></div>
+   <div class="card"><h2>Notas <span class="sub">${N.length}</span><button class="btn acao" id="nfNova">+ Nota avulsa</button></h2>
+    <div class="acoes" style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0"><button class="btn" id="nfAprov">Aprovar marcadas</button><button class="btn sec" id="nfCanc">Cancelar marcadas</button><button class="btn" id="nfEnviar">Enviar aprovadas ao emissor</button></div><p class="mini" id="nfMsg"></p>
+    <div class="wrap"><table><tr><th></th><th>Nota</th><th>De → Para</th><th class="r">Valor</th><th>Situação</th></tr>
+    ${N.map(n=>`<tr><td>${['rascunho','aprovada','erro'].includes(n.status)?`<input type="checkbox" data-nfsel="${n.id}">`:''}</td>
+      <td><b>${NAT_NF[n.natureza]||n.natureza}</b> <small>${n.modelo==='nfse'?'NFS-e':'NF-e'+(n.cfop?' · CFOP '+n.cfop:'')}${n.competencia?' · '+nomeMes(n.competencia.slice(0,7)):''}${n.numero?' · nº '+esc(n.numero):''}</small><small>${esc(n.descricao)}</small></td>
+      <td>${esc(n.emitente)} → ${esc(n.destinatario)}${n.vencimento?`<small>vence ${dataBR(n.vencimento)}</small>`:''}</td>
+      <td class="r">${brl(n.valor)}${n.base_calculo?`<small>base ${brl(n.base_calculo)}</small>`:''}</td>
+      <td><span class="st ${(ST_NF[n.status]||['',''])[0]}">${(ST_NF[n.status]||['',n.status])[1]}</span>${n.erro_msg?`<small style="color:var(--rt)">${esc(n.erro_msg)}</small>`:''}${n.pdf_url?` <a href="${esc(n.pdf_url)}" target="_blank" rel="noopener">PDF</a>`:''}${n.xml_url?` <a href="${esc(n.xml_url)}" target="_blank" rel="noopener">XML</a>`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="sub">Nenhuma nota ainda.</td></tr>'}</table></div></div>
+   <div class="card"><h2>Cadastros fiscais <span class="sub">franqueadora, franqueados e comércios</span><button class="btn acao" data-fent="">+ Cadastro</button></h2><div class="wrap"><table>
+    <tr><th>Nome</th><th>Tipo</th><th>CNPJ/CPF</th><th class="r">Máquinas</th><th>Emite pelo app</th></tr>
+    ${E.map(e=>`<tr class="clic" data-fent="${e.id}"><td><b>${esc(e.nome)}</b>${e.ativo?'':' <span class="st off">inativo</span>'}<small>${esc(e.razao_social||'')}${e.marca?' · '+esc(e.marca):''}</small></td><td>${TIPO_ENT[e.tipo]}</td><td>${docBR(e.documento)}</td>
+      <td class="r">${e.tipo==='franqueado'?e.maquinas:'—'}</td><td>${e.emite?`<span class="st">sim</span> <small>${e.ambiente==='producao'?'produção':'teste'}</small>`:'—'}</td></tr>`).join('')||'<tr><td colspan="5" class="sub">Cadastre primeiro a franqueadora.</td></tr>'}</table></div>
+    <p class="mini" style="margin-top:6px">Certificado digital A1 e senhas não ficam no app: o franqueado envia direto para o emissor.</p></div>`;
+  $('#fFech').onsubmit=async e=>{e.preventDefault();const m=$('#fMes').value;if(!m)return;const d=await rpc('mvt_admin_nf_fechamento',{p_sessao:S(),p_competencia:m+'-01'});
+    $('#fMsg').textContent=d.erro?d.erro:`${d.criadas} nota(s) criada(s) em rascunho${d.puladas?` · ${d.puladas} franqueado(s) pulado(s) (sem máquina ou já gerado)`:''}.`;if(!d.erro&&d.criadas)setTimeout(telaNotas,900)};
+  const marcadas=()=>[...document.querySelectorAll('[data-nfsel]:checked')].map(i=>i.dataset.nfsel);
+  const acao=async a=>{const ids=marcadas();if(!ids.length){$('#nfMsg').textContent='Marque as notas primeiro.';return}
+    if(a==='cancelar'&&!confirm(`Cancelar ${ids.length} nota(s)? (só rascunho/aprovada/erro; nota já emitida se cancela no emissor)`))return;
+    const d=await rpc('mvt_admin_nf_acao',{p_sessao:S(),p_ids:ids,p_acao:a});$('#nfMsg').textContent=d.erro||`${d.alteradas} nota(s) ${a==='aprovar'?'aprovada(s)':'cancelada(s)'}.`;if(!d.erro)setTimeout(telaNotas,700)};
+  $('#nfAprov').onclick=()=>acao('aprovar');$('#nfCanc').onclick=()=>acao('cancelar');
+  $('#nfEnviar').onclick=async()=>{if(!confirm('Enviar as notas aprovadas ao emissor?'))return;$('#nfMsg').textContent='Enviando…';
+    try{const x=await fetch(URL_SB+'/functions/v1/nf-emitir',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({sessao:S()})}).then(r=>r.json());
+      if(x.erro){$('#nfMsg').textContent=x.erro;return}
+      const pend=(x.resultado||[]).filter(o=>o.pendente);
+      $('#nfMsg').textContent=x.enviadas?`${x.enviadas} processada(s).`+(pend.length?' '+pend[0].pendente:''):'Nenhuma nota aprovada para enviar.';setTimeout(telaNotas,1500)}
+    catch(_){$('#nfMsg').textContent='Sem conexão com o servidor agora.'}};
+  $('#nfNova').onclick=()=>formNota()}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-fent]');if(!b||!NF)return;formEntidade(NF.entidades.find(x=>x.id===b.dataset.fent))});
+function formEntidade(x){const novo=!x;x=x||{tipo:'franqueado',nome:'',razao_social:'',documento:'',email_nf:'',inscricao_municipal:'',inscricao_estadual:'',regime:'simples',endereco:{},marca:'MV Toy',local_id:null,emite:false,ambiente:'homologacao',ativo:true,obs:''};
+  const op=(o,v)=>Object.entries(o).map(([k,n])=>`<option value="${k}" ${k===v?'selected':''}>${n}</option>`).join('');const en=x.endereco||{};
+  const minhas=novo?[]:D.maquinas.filter(m=>m.franqueado_id===x.id).map(m=>m.codigo);
+  modal(`<h3>${novo?'Novo cadastro fiscal':'Editar cadastro fiscal'}</h3><form class="form" id="ffe">
+   <div class="lin"><div><label>Tipo</label><select id="eTp">${op(TIPO_ENT,x.tipo)}</select></div><div><label>Marca</label><input id="eMc" value="${esc(x.marca||'')}" placeholder="MV Toy"></div></div>
+   <div><label>Nome</label><input id="eNm" required value="${esc(x.nome)}"></div>
+   <div><label>Razão social</label><input id="eRz" value="${esc(x.razao_social||'')}"></div>
+   <div class="lin"><div><label>CNPJ ou CPF</label><input id="eDc" inputmode="numeric" value="${esc(x.documento||'')}"></div><div><label>Regime</label><select id="eRg">${op({simples:'Simples Nacional',mei:'MEI',presumido:'Lucro Presumido',real:'Lucro Real'},x.regime)}</select></div></div>
+   <div class="lin"><div><label>Inscrição municipal</label><input id="eIm" value="${esc(x.inscricao_municipal||'')}"></div><div><label>Inscrição estadual</label><input id="eIe" value="${esc(x.inscricao_estadual||'')}"></div></div>
+   <div><label>E-mail para receber a nota</label><input id="eEm" type="email" value="${esc(x.email_nf||'')}"></div>
+   <div class="lin"><div><label>CEP</label><input id="eCep" value="${esc(en.cep||'')}"></div><div><label>Cidade/UF</label><input id="eCid" value="${esc([en.cidade,en.uf].filter(Boolean).join('/'))}" placeholder="Araraquara/SP"></div></div>
+   <div class="lin"><div><label>Rua</label><input id="eRua" value="${esc(en.logradouro||'')}"></div><div><label>Nº / Bairro</label><input id="eNb" value="${esc([en.numero,en.bairro].filter(Boolean).join(' / '))}" placeholder="123 / Centro"></div></div>
+   <div id="eLocW"><label>Local (quando é comércio parceiro)</label><select id="eLoc"><option value="">—</option>${(D.locais||[]).map(l=>`<option value="${l.id}" ${l.id===x.local_id?'selected':''}>${esc(l.nome)}</option>`).join('')}</select></div>
+   <div id="eMaqW"><label>Máquinas deste franqueado (royalties)</label><div class="checks" style="max-height:160px;overflow:auto">${D.maquinas.map(m=>`<label><input type="checkbox" data-emq="${m.codigo}" ${minhas.includes(m.codigo)?'checked':''}> ${m.codigo} · ${esc(m.tipo)}</label>`).join('')}</div></div>
+   <div class="lin"><div><label>Emite nota pelo app?</label><select id="eEmt"><option value="0">Não</option><option value="1" ${x.emite?'selected':''}>Sim</option></select></div><div><label>Ambiente</label><select id="eAmb">${op({homologacao:'Teste (homologação)',producao:'Produção'},x.ambiente)}</select></div></div>
+   <div class="lin"><div><label>Situação</label><select id="eAt"><option value="1">Ativo</option><option value="0" ${x.ativo?'':'selected'}>Inativo</option></select></div><div><label>Obs.</label><input id="eOb" value="${esc(x.obs||'')}"></div></div>
+   <p class="mini" id="eMsg"></p><div class="lin"><button class="btn">Salvar</button><button type="button" class="btn sec" data-fechar>Fechar</button></div></form>`,w=>{
+   const g=id=>w.querySelector(id).value;const vis=()=>{w.querySelector('#eLocW').style.display=g('#eTp')==='comercio'?'':'none';w.querySelector('#eMaqW').style.display=g('#eTp')==='franqueado'?'':'none'};vis();w.querySelector('#eTp').onchange=vis;
+   w.querySelector('#ffe').onsubmit=async e=>{e.preventDefault();const [cid,uf]=g('#eCid').split('/').map(s=>s&&s.trim());const [nro,bai]=g('#eNb').split('/').map(s=>s&&s.trim());
+    const dados={tipo:g('#eTp'),nome:g('#eNm'),razao_social:g('#eRz'),documento:g('#eDc'),regime:g('#eRg'),inscricao_municipal:g('#eIm'),inscricao_estadual:g('#eIe'),email_nf:g('#eEm'),
+      endereco:{cep:g('#eCep').replace(/\D/g,''),cidade:cid||'',uf:(uf||'').toUpperCase(),logradouro:g('#eRua'),numero:nro||'',bairro:bai||''},marca:g('#eMc'),local_id:g('#eTp')==='comercio'?g('#eLoc'):'',
+      emite:g('#eEmt')==='1',provedor_nfse:g('#eTp')==='franqueadora'?'asaas':(g('#eEmt')==='1'?'focus':''),provedor_nfe:g('#eEmt')==='1'?'focus':'',ambiente:g('#eAmb'),ativo:g('#eAt')==='1',obs:g('#eOb')};
+    const d=await rpc('mvt_admin_fiscal_entidade',{p_sessao:S(),p_id:novo?null:x.id,p_dados:dados});if(d.erro){w.querySelector('#eMsg').textContent=d.erro;return}
+    if(dados.tipo==='franqueado'){const marc=[...w.querySelectorAll('[data-emq]:checked')].map(i=>i.dataset.emq);const tirar=minhas.filter(c=>!marc.includes(c));
+      if(tirar.length){const t=await rpc('mvt_admin_maquina_franqueado',{p_sessao:S(),p_codigos:tirar,p_franqueado:null});if(t.erro){w.querySelector('#eMsg').textContent=t.erro;return}}
+      if(marc.length){const v=await rpc('mvt_admin_maquina_franqueado',{p_sessao:S(),p_codigos:marc,p_franqueado:d.id});if(v.erro){w.querySelector('#eMsg').textContent=v.erro;return}}
+      D.maquinas.forEach(m=>{if(marc.includes(m.codigo))m.franqueado_id=d.id;else if(tirar.includes(m.codigo))m.franqueado_id=null})}
+    w.remove();telaNotas()}})}
+function formNota(){const E=(NF&&NF.entidades||[]).filter(e=>e.ativo);if(E.length<2){alert('Cadastre primeiro o emitente e o destinatário em Cadastros fiscais.');return}
+  const opE=f=>E.filter(f).map(e=>`<option value="${e.id}">${esc(e.nome)} (${TIPO_ENT[e.tipo]})</option>`).join('');
+  const prods=produtos();
+  modal(`<h3>Nota avulsa</h3><form class="form" id="fnf">
+   <div><label>Tipo de nota</label><select id="nNat">${Object.entries(NAT_NF).filter(([k])=>!['royalties','fundo_marketing'].includes(k)).map(([k,n])=>`<option value="${k}">${n}</option>`).join('')}</select></div>
+   <div class="lin"><div><label>Quem emite</label><select id="nEm">${opE(e=>e.tipo!=='comercio')}</select></div><div><label>Para quem</label><select id="nDe">${opE(()=>true)}</select></div></div>
+   <div id="nSrv"><label>Valor (R$)</label><input id="nVal" type="number" step="0.01" min="0"></div>
+   <div id="nPrd"><label>Itens (produto · NCM · qtd · valor unitário)</label><div id="nIt"></div><button type="button" class="btn sec" id="nAdd">+ Item</button></div>
+   <div><label>Descrição</label><input id="nDs" placeholder="Ex.: Taxa de franquia MV Toy — contrato de 01/12/2026"></div>
+   <div><label>Vencimento (se tiver cobrança)</label><input id="nVc" type="date"></div>
+   <p class="mini" id="nMsg"></p><div class="lin"><button class="btn">Criar em rascunho</button><button type="button" class="btn sec" data-fechar>Fechar</button></div></form>`,w=>{
+   const g=id=>w.querySelector(id);const linha=()=>{const d=document.createElement('div');d.className='lin';d.innerHTML=`<div><input list="nPl" class="iN" placeholder="Produto"></div><div><input class="iNcm" placeholder="NCM" inputmode="numeric"></div><div><input class="iQ" type="number" min="1" placeholder="Qtd"></div><div><input class="iV" type="number" step="0.01" min="0" placeholder="R$ un."></div>`;g('#nIt').appendChild(d)};
+   g('#nIt').insertAdjacentHTML('beforebegin',`<datalist id="nPl">${prods.map(p=>`<option value="${esc(p.nome)}">`).join('')}</datalist>`);linha();g('#nAdd').onclick=linha;
+   const vis=()=>{const srv=g('#nNat').value==='taxa_franquia';g('#nSrv').style.display=srv?'':'none';g('#nPrd').style.display=srv?'none':''};vis();g('#nNat').onchange=vis;
+   g('#fnf').onsubmit=async e=>{e.preventDefault();const itens=[...w.querySelectorAll('#nIt .lin')].map(l=>({nome:l.querySelector('.iN').value.trim(),ncm:l.querySelector('.iNcm').value.replace(/\D/g,''),qtd:Number(l.querySelector('.iQ').value),valor_unit:Number(l.querySelector('.iV').value)})).filter(i=>i.nome&&i.qtd>0);
+    const d=await rpc('mvt_admin_nf_nova',{p_sessao:S(),p_dados:{natureza:g('#nNat').value,emitente_id:g('#nEm').value,destinatario_id:g('#nDe').value,valor:g('#nVal').value||null,itens,descricao:g('#nDs').value,vencimento:g('#nVc').value}});
+    if(d.erro){g('#nMsg').textContent=d.erro;return}w.remove();telaNotas()}})}
